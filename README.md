@@ -2,7 +2,7 @@
 
 A highly optimized, fully vectorized Monte Carlo Collision (MCC) simulator built in MATLAB. This application models the dynamics of **Charge Exchange (CEX)** collisions in a plasma thruster plume (e.g., Ion or Hall thrusters) and features a fully interactive GUI with real-time analytics, directional flux probes, and GIF recording.
 
-*Adapted and heavily upgraded from the original Java-based PIC/MCC demonstration by [Particle In Cell Consulting](http://www.particleincell.com/2011/mcc/).*
+*Adapted from the original Java-based PIC/MCC demonstration by Lubos Brieda [Particle In Cell Consulting](http://www.particleincell.com/2011/mcc/).*
 
 
 ## ✨ Key Features
