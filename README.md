@@ -1,29 +1,78 @@
-#  Interactive MCC Charge Exchange Simulator (MATLAB)
+🚀 Ion Thruster Digital Twin & MCC Plume Simulator (MATLAB)
+A suite of high-performance, vectorized MATLAB applications for modeling Charge Exchange (CEX) dynamics and Grid Erosion in Ion and Hall thrusters.
 
-A highly optimized, fully vectorized Monte Carlo Collision (MCC) simulator built in MATLAB. This application models the dynamics of **Charge Exchange (CEX)** collisions in a plasma thruster plume (e.g., Ion or Hall thrusters) and features a fully interactive GUI with real-time analytics, directional flux probes, and GIF recording.
+This repository hosts two major versions:
 
-*Adapted from the original Java-based PIC/MCC demonstration by Lubos Brieda [Particle In Cell Consulting](http://www.particleincell.com/2011/mcc/).*
+Plume MCC Simulator: Focuses on CEX ion production and downstream flux collection (Plume dynamics) (charge_exchange_code.m).
 
+Grid Digital Twin (EOL): Focuses on "Accelerated Life Testing," modeling the physical sputtering and eventual structural failure of accelerator grids (TransientDigitalTwin.m).
 
-## ✨ Key Features
+📺 Digital Twin Demo: Grid Erosion & Failure (CXfail.mp4)
+This simulation demonstrates the end-of-life (EOL) transition of a dual-grid ion optics system. As CEX ions pit the accelerator grid, the geometry thins, and the negative potential barrier collapses.
 
-* **⚡ Vectorized Physics Engine:** Replaces traditional loops with matrix operations for massive performance gains in MATLAB.
-* **📊 Live 2D & 1D Analytics:** Instantly visualizes the plume using a 2D spatial heatmap (`histcounts2`) and a 1D axial density profile.
-* **🎯 Directional Flux Probes:** Point-and-click to place physical probes in the simulation domain. 
-    * Adjustable **collection radius** and **surface angle**.
-    * Probes act as physical barriers, absorbing particles and creating realistic downstream "shadows."
-* **📈 Real-Time Time Series:** Tracks the particle flux (hits per time-step) across all placed probes on a live-scrolling plot. Includes instant toggles for **Log X** and **Log Y** scales.
-* **💾 Data Export:** Pause the simulation at any time and export the raw probe flux histories directly to a nicely formatted `.csv` file for post-processing.
-* **🎥 Built-in GIF Recorder:** Silently buffers frames into memory while running, allowing you to export high-quality `.gif` animations of the plume dynamics with a single click.
+<p align="center">
+<video src="https://github.com/user-attachments/assets/f7e544f9-890e-43f9-bb1e-c623c5e220ad" width="900px" controls autoplay loop muted>
+Your browser does not support the video tag.
+</video>
+</p>
 
----
+✨ Key Features
+⚡ Vectorized Physics Engine
+Both versions replace traditional particle-tracking loops with matrix operations, enabling real-time simulation of thousands of particles natively in MATLAB.
 
-## 🛠️ Installation & Usage
+🛠️ Dynamic Sputter Morphing (Digital Twin)
+Yamamura Yield Integration: Calculates material removal based on ion impact energy and angle.
 
-1. **Prerequisites:** You need **MATLAB R2015b or newer** (requires `histcounts2`, `gobjects`, and standard UI components). No extra toolboxes are required.
-2. **Download:** Clone this repository or download the `MCC_App.m` file.
-3. **Run:** Open MATLAB, navigate to the folder containing the file, and type the following in the Command Window:
-   ```matlab
-   MCC_App
+Self-Consistent Laplace Solver: As the grid "melts" away, the code remeshes the geometry and recalculates the electrostatic potential profile on the fly to reflect the changing field topology.
 
-   
+Structural Failure Logic: Removes grid cells once they cross a cumulative damage threshold, allowing for realistic "hole-to-hole" erosion modeling.
+
+📊 Real-Time Telemetry & Analytics
+EBS Monitoring: Tracks the minimum centerline potential to predict the onset of Electron Backstreaming.
+
+Beam Diagnostics: Live calculation of 95% Beam Divergence half-angles.
+
+Directional Flux Probes (Plume Ver.): Point-and-click probes with adjustable collection radii and surface angles to capture directional particle flux and downstream shadowing.
+
+🎥 Live 3D CAD Projection
+A synchronized 3D window projects the 2D axisymmetric physics into a revolved 3D view. This allows for real-time inspection of "barrel erosion" and "pit and groove" patterns from any angle.
+
+💾 Engineering Exports
+GIF Recorder: Buffer frames silently into memory and export high-quality animations.
+
+CSV Data Export: Save probe time-series or telemetry history (EBS/Divergence) for post-processing and validation.
+
+🛠️ Installation & Usage
+Prerequisites: You need MATLAB R2015b or newer. No additional toolboxes (like Signal Processing or Image Processing) are required.
+
+Download: Clone this repository or download the .m files.
+
+Run: Open MATLAB, navigate to the folder, and run either:
+
+Matlab
+TransientDigitalTwin  % For Grid Erosion & EOL Study
+charge_exchange_code  % For Plume Dynamics & Flux Probes
+🔬 Physics Context
+
+These tools can help students and engineers visualize the primary failure mechanism of gridded ion engines.
+
+Charge Exchange (CEX): Occurs when a fast-moving beam ion steals an electron from a slow-moving neutral atom.
+
+Grid Erosion: The resulting slow-moving CEX ion is accelerated into the accelerator grid by the negative potential, causing sputtering.
+
+EOL: The thruster reaches its end-of-life when the grid can no longer prevent electrons from flowing back into the discharge chamber (EBS failure) or when structural integrity is lost.
+
+Adapted from the original Java-based PIC/MCC demonstration by Lubos Brieda Particle In Cell Consulting.
+
+🤝 Community & Feedback
+I am actively seeking feedback from the #ElectricPropulsion community. Future roadmap items include:
+
+Integrating self-consistent space charge effects (Poisson solver).
+
+Adding support for triple-grid (3-grid) systems.
+
+Implementing more complex sputtering models for different materials (Graphite, Titanium).
+
+If you find a bug or have a suggestion for the physics model, please open an Issue or PR!
+
+#ElectricPropulsion #PlasmaPhysics #MATLAB #AerospaceEngineering #DigitalTwin #Simulation
