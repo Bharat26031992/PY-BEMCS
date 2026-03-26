@@ -116,8 +116,8 @@ This means you are free to use, share, and adapt this code for academic, researc
 *For commercial inquiries or alternative licensing, please contact the author.*
 
 ---
-## ✍️ Author
+## Author
 
-**Dr.Bharat Singh Rawat** - *Lead Developer & Physics Modeling* 
+**Dr.Bharat Singh Rawat** - *Lead Developer* 
 
 Feel free to reach out for collaborations or questions regarding the code on bharat.bharat22@gmail.com!
