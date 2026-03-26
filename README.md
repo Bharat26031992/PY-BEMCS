@@ -7,7 +7,7 @@
 </h1>
 
 <p align="center">
-  <strong>A simulation tool for charge-exchange (CEX) physics, ion optics erosion, and multiphysics studies in ion thrusters.</strong>
+  <strong>A simulation tool for ion beam extraction, charge-exchange (CEX) physics, ion optics erosion, and multiphysics studies in ion thrusters.</strong>
 </p>
 
 ---
@@ -51,7 +51,6 @@ This repository currently includes:
 - **Dynamic erosion and failure logic** with in-situ remeshing behavior.
 
 ### Python Multiphysics Additions (Latest)
-
 - **Poisson field update with space charge** using both ion and electron density contributions.
 - **Neutralizer electron model** with configurable electron injection rate and electron temperature.
 - **Thermal-erosion coupling** with simulation modes:
@@ -71,6 +70,8 @@ This repository currently includes:
 ---
 
 ## Installation and Usage
+
+- Current release only simulates physics for Xe+ ions (This is an ongoing project).
 
 ### MATLAB Workflow
 
