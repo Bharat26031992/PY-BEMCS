@@ -35,7 +35,7 @@ This repository currently includes:
 </p>
 
 <p align="center">
-  <video src="examples/SpaceChargeextraction.mp4" width="900px" controls autoplay loop muted>
+  <video src="examples/SpaceCharge_example.mp4" width="900px" controls autoplay loop muted>
   </video>
 </p>
 
