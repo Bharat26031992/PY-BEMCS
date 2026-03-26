@@ -1,5 +1,6 @@
 <h1 align="center">
   <big>Python Beam Extraction & Monte Carlo Simulator (PY-BEMCS)</big>
+  ![Simulation Screenshot](https://github.com/Bharat26031992/PY-BEMCS/PY-BEMCS-ICON.png)
 </h1>
 
 <p align="center">
