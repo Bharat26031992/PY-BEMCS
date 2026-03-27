@@ -26,7 +26,7 @@ def worker_sweep(gap, n0_sweep, result_queue):
         }
         
         sim.build_domain(params)
-        steady_state_steps = 600
+        steady_state_steps = 500
         
         # Accumulators for the steady-state period
         total_hits = 0
@@ -85,7 +85,7 @@ def worker_sweep(gap, n0_sweep, result_queue):
 # --- MAIN GUI THREAD ---
 def run_impingement_benchmark():
     grid_gaps = [0.5, 0.75, 1.0] 
-    n0_sweep = np.linspace(1e16, 2.5e17, 15) 
+    n0_sweep = np.linspace(1e15, 5e17, 20) 
     
     plt.ion()
     fig, ax = plt.subplots(figsize=(10, 6))
