@@ -17,10 +17,10 @@ def worker_sweep(gap, n0_sweep, result_queue):
         sim = DigitalTwinSimulator()
         params = {
             'sim_mode': 'Both',
-            'ts': 0.5, 'ta': 0.5, 
+            'ts': 1, 'ta': 1, 
             'rs': 1.0, 'ra': 0.6,
             'cham_s': 0, 'cham_a': 0,
-            'Vs': 1000, 'Va': -200, 
+            'Vs': 1650, 'Va': -350, 
             'gap': gap,
             'n0_plasma': n0,
             'Te_up': 3.0, 'Ti': 0.1,
@@ -46,8 +46,8 @@ def worker_sweep(gap, n0_sweep, result_queue):
             # -----------------------------------
 
             # Early Stopping Check
-            if step_idx >= 250 and len(div_history) == 50:
-                if np.std(div_history) < 0.25: 
+            if step_idx >= 500 and len(div_history) == 50:
+                if np.std(div_history) < 0.1: 
                     print(f"[Core Gap {gap}mm | n0: {n0:.1e}] CONVERGED EARLY at Step {step_idx}!", flush=True)
                     break
 
@@ -74,9 +74,9 @@ def run_parallel_benchmark():
     # 1. Setup Live Plot
     plt.ion()
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.set_title('PY-BEMCS: Xenon Beam Divergence vs. Perveance (Simulation Only)')
+    ax.set_title('PY-BEMCS: Xenon Beam Divergence vs. Perveance (Without Neutralizer)')
     ax.set_xlabel('Perveance (A/V^1.5)')
-    ax.set_ylabel('95th Percentile Divergence Angle (Degrees)')
+    ax.set_ylabel('Divergence Angle (Degrees)')
     ax.grid(True)
     
     lines_sim = {}
