@@ -45,8 +45,9 @@ This repository currently includes:
 ### Core Physics
 
 - **Vectorized particle updates** for high-throughput runtime performance.
+- **Reduced electron mass (m_e = M_Xe/100)** to speed up the simulation time.
 - **Self-consistent beam extraction** from plasma meniscus and Bohm criteria.
-- **CEX collision modeling** with probabilistic scattering, with user defined region in source code.
+- **CEX collision modeling** with probabilistic scattering, with user defined region in the source code.
 - **Dynamic erosion and failure logic** due to CEX ions with in-situ remeshing behavior.
 
 ### Python Multiphysics Additions (Latest)
