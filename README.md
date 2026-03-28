@@ -35,7 +35,7 @@ This repository currently includes:
 </p>
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/331fac12-c8ef-427f-8381-171eaee8a657" width="900px" autoplay loop muted playsinline>
+  <video src="https://github.com/user-attachments/assets/68f347d0-b163-49d8-8dc5-8b52536709c6" width="900px" autoplay loop muted playsinline>
   </video>
 </p>
 ---
