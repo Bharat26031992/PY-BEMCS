@@ -20,7 +20,7 @@ def worker_sweep(gap, n0_sweep, result_queue):
             'ts': 1, 'ta': 1, 
             'rs': 1.0, 'ra': 0.6,
             'cham_s': 0, 'cham_a': 0,
-            'Vs': 1650, 'Va': -500, 
+            'Vs': 1650, 'Va': -200, 
             'gap': gap,
             'n0_plasma': n0,
             'Te_up': 3.0, 'Ti': 0.1,
