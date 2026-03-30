@@ -5,36 +5,37 @@ from scipy.sparse.linalg import factorized
 
 class DigitalTwinSimulator:
     def __init__(self):
-        # Fundamental Constants
+        # Constants for sumulation
         self.dt = 1e-9
         self.q = 1.602e-19
         self.m_XE = 131.293 * 1.6605e-27
         self.kB = 1.380649e-23
         self.eps0 = 8.854e-12
         
-        # ARTIFICIAL ELECTRON MASS: 100x lighter than Xenon
+        # ARTIFICIAL ELECTRON MASS:%To be more accurate
+        #one can change the mass ration but it might take longer time and smaller timesteps
         self.m_e = self.m_XE / 100.0 
         
-        # --- THERMAL MULTIPHYSICS CONSTANTS ---
+        # --- Material constants for Molybdenum
         self.macro_weight = 3e5  
-        self.alpha_moly = 4.8e-6 
+        self.alpha_moly = 4.8e-6 #Coefficient of thermal expansion
         self.sb_sigma = 5.67e-8  
         self.emissivity = 0.8    
-        self.thermal_accel = 1e7 
+        self.thermal_accel = 1e7 #Acceleration constant
         
         self.C_cell = 10280 * (0.05e-3)**2 * 1e-3 * 250 
         self.A_cell = 2 * (0.05e-3) * 1e-3 
         
-        self.T_screen = 300.0 
-        self.T_accel = 300.0 
+        self.T_screen = 300.0 # Intial temperature in K for the screen grid
+        self.T_accel = 300.0 # Initial temperature in K for the acceleration grid
         
-        # Mesh parameters (High Accuracy)
-        self.Lx = 20
-        self.Ly = 3
-        self.dx = 0.01
-        self.dy = 0.01
-        self.nx = int(self.Lx / self.dx) + 1
-        self.ny = int(self.Ly / self.dy) + 1
+        # Mesh parameters
+        self.Lx = 20 # Dimensions in x direction (axial distance)
+        self.Ly = 3  # Dimension in y direction (radial distance)
+        self.dx = 0.01 # Step size in x direction
+        self.dy = 0.01 # Stepsize in y direction
+        self.nx = int(self.Lx / self.dx) + 1 # Number of cells in x direction
+        self.ny = int(self.Ly / self.dy) + 1 # Number of cells in y direction
         
         self.x_pts = np.linspace(0, self.Lx, self.nx)
         self.y_pts = np.linspace(0, self.Ly, self.ny)
@@ -43,7 +44,7 @@ class DigitalTwinSimulator:
         self.iteration = 0
         self.T_map = np.full((self.ny, self.nx), 300.0)
         
-        # Sparse Matrix References
+        # Sparse Matrix 
         self.laplacian_lu = None
         self.is_interior_mask = None
         self.is_bound_mask = None
@@ -51,7 +52,7 @@ class DigitalTwinSimulator:
         self.reset_arrays()
 
     def reset_arrays(self):
-        # --- PRE-ALLOCATED PARTICLE BUFFERS ---
+        # --- PRE-ALLOCATED PARTICLE BUFFERS TO SAVE SOME MEMORY
         self.max_p = 50000  # Initial capacity for Ions
         self.max_e = 50000  # Initial capacity for Electrons
 
@@ -76,7 +77,7 @@ class DigitalTwinSimulator:
         self.Ex, self.Ey = np.zeros((self.ny, self.nx)), np.zeros((self.ny, self.nx))
         self.interp_Ex, self.interp_Ey = None, None
 
-    # --- BUFFER MANAGEMENT HELPERS ---
+    # --- BUFFER MANAGEMENT ---
     def _add_ions(self, x, y, vx, vy, is_cex):
         n_new = len(x)
         if self.num_p + n_new > self.max_p:
@@ -256,7 +257,7 @@ class DigitalTwinSimulator:
             new_cex = np.zeros(num_inject, dtype=bool)
             self._add_ions(new_x, new_y, new_vx, new_vy, new_cex)
 
-        # --- DYNAMIC NEUTRALIZER CONTROL ---
+        # --- NEUTRALIZER CONTROL ---
         num_e = int(params.get('neut_rate', 30))
         Te_eV = params.get('Te', 5.0)
 
@@ -270,7 +271,6 @@ class DigitalTwinSimulator:
 
         # --- CREATE ACTIVE VIEWS FOR FAST MATH ---
         # Slicing the pre-allocated buffer gives us access to only "alive" particles 
-        # without creating copies in memory. Modifying these slices modifies the buffer.
         p_x = self.p_x[:self.num_p]
         p_y = self.p_y[:self.num_p]
         p_vx = self.p_vx[:self.num_p]
@@ -322,7 +322,7 @@ class DigitalTwinSimulator:
         current_div = np.percentile(np.abs(np.arctan2(p_vy[post_grid], p_vx[post_grid])) * 180 / np.pi, 95) if np.sum(post_grid) > 5 else np.nan
         min_pot = np.min(self.V[0, :])
 
-        # --- D. 2D THERMAL MULTIPHYSICS & HIT DETECTION ---
+        # --- D. 2D THERMAL CALCULATIONS & HIT DETECTION ---
         ix = np.clip(np.round(p_x / self.dx).astype(int), 0, self.nx - 1)
         iy = np.clip(np.round(p_y / self.dy).astype(int), 0, self.ny - 1)
         hit_grid = self.isBound[iy, ix]
@@ -356,7 +356,9 @@ class DigitalTwinSimulator:
                 self.build_domain(params) 
                 remeshed = True
 
-        # --- SECONDARY ELECTRON EMISSION (MOLYBDENUM) ---
+        # --- SECONDARY ELECTRON EMISSION (MOLYBDENUM)
+        #This is a very preliminary model for secondary emission of electrons
+        #More advanced model will be applied in the upcoming releases.
         valid_see_hit = hit_grid & (p_x > 0.5)
         
         if np.any(valid_see_hit):
@@ -378,13 +380,15 @@ class DigitalTwinSimulator:
                 
                 self._add_electrons(see_x, see_y, see_vx, see_vy)
                 
-                # Re-establish electron active views because buffer may have grown
                 e_x = self.e_x[:self.num_e]
                 e_y = self.e_y[:self.num_e]
                 e_vx = self.e_vx[:self.num_e]
                 e_vy = self.e_vy[:self.num_e]
 
-        # --- EROSION LOGIC ---
+        # --- EROSION LOGIC (Sputtering)
+        #Again this is a very naive way of interpreting erosion/sputtering.
+        #I am working on adding more advanced features for sputtering such as
+        #material dependence, angular dependence and angular yields as well.
         is_erosion_hit = hit_grid & (p_x > 0.5)
         
         if sim_mode in ['Erosion', 'Both'] and np.any(is_erosion_hit):
@@ -402,7 +406,7 @@ class DigitalTwinSimulator:
                 self.build_sparse_matrix() 
                 remeshed = True
 
-        # --- COMPACT BUFFERS (PURGE DEAD PARTICLES) ---
+        # --- PURGING DEAD PARTICLES---
         dead_mask = hit_grid | out_of_bounds
         alive_mask = ~dead_mask
         n_alive = np.sum(alive_mask)
@@ -441,6 +445,9 @@ class DigitalTwinSimulator:
                 self.num_e = n_alive_e
 
         # --- E. CEX COLLISIONS ---
+        #Again a very basic formula for CEX collision. Working on to include the
+        # cross section dependence and the pressure profile dependence along the axial
+        #and radial direction to get more accurate predictions.
         if self.num_p > 0:
             primary_mask = (~p_cex) & (p_x >= 1) & (p_x <= 20.0)
             if np.any(primary_mask):
