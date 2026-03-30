@@ -30,13 +30,13 @@ class DigitalTwinSimulator:
         self.T_screen = 300.0 # Intial temperature in K for the screen grid
         self.T_accel = 300.0 # Initial temperature in K for the acceleration grid
         
-        # Mesh parameters
-        self.Lx = 20 # Dimensions in x direction (axial distance)
-        self.Ly = 3  # Dimension in y direction (radial distance)
-        self.dx = 0.01 # Step size in x direction
-        self.dy = 0.01 # Stepsize in y direction
-        self.nx = int(self.Lx / self.dx) + 1 # Number of cells in x direction
-        self.ny = int(self.Ly / self.dy) + 1 # Number of cells in y direction
+        # Mesh parameters (High Accuracy)
+        self.Lx = 20
+        self.Ly = 3
+        self.dx = 0.01
+        self.dy = 0.01
+        self.nx = int(self.Lx / self.dx) + 1
+        self.ny = int(self.Ly / self.dy) + 1
         
         self.x_pts = np.linspace(0, self.Lx, self.nx)
         self.y_pts = np.linspace(0, self.Ly, self.ny)
@@ -396,7 +396,7 @@ class DigitalTwinSimulator:
         # --- EROSION LOGIC (Sputtering)
         #Again this is a very naive way of interpreting erosion/sputtering.
         #I am working on adding more advanced features for sputtering such as
-        #material dependence, angular dependence and angular yields as well.
+        #material dependence,lookup tables,angular dependence and angular yields as well.
         is_erosion_hit = hit_grid & (p_x > 0.5)
         
         if sim_mode in ['Erosion', 'Both'] and np.any(is_erosion_hit):
