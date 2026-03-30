@@ -396,7 +396,7 @@ class DigitalTwinSimulator:
         # --- EROSION LOGIC (Sputtering)
         #Again this is a very naive way of interpreting erosion/sputtering.
         #I am working on adding more advanced features for sputtering such as
-        #material dependence, angular dependence and angular yields as well.
+        #material dependence,lookup tables,angular dependence and angular yields as well.
         is_erosion_hit = hit_grid & (p_x > 0.5)
         
         if sim_mode in ['Erosion', 'Both'] and np.any(is_erosion_hit):
