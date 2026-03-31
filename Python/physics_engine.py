@@ -20,17 +20,9 @@ class DigitalTwinSimulator:
         #Material properties for Molybdenum
         self.macro_weight = 3e5  
         self.alpha_moly = 4.8e-6 #Coefficient of thermal expansion
-        self.sb_sigma = 5.67e-8  
+        self.sb_sigma = 5.67e-8  #Stefan-Boltzmann constant
         self.emissivity = 0.8    
         self.thermal_accel = 1e7 #Acceleration constant
-        
-        self.C_cell = 10280 * (0.05e-3)**2 * 1e-3 * 250 
-        self.A_cell = 2 * (0.05e-3) * 1e-3 
-        
-        # Dynamic Grid Arrays
-        self.T_grids = []
-        self.mask_grids = []
-        self.V_dc = None
         
         # Mesh parameters (High Accuracy)
         self.Lx = 20
@@ -39,6 +31,20 @@ class DigitalTwinSimulator:
         self.dy = 0.01
         self.nx = int(self.Lx / self.dx) + 1
         self.ny = int(self.Ly / self.dy) + 1
+        
+        #Calculating the heat capacity of a cell based on Molybdenum properties
+        #10280 J/kg-K is the specific heat capacity of Molybdenum, 
+        #250 is the specific heat capacity of Molybdenum in J/kg-K, and the cell volume is (dx x dy x 1mm) in m^3
+        # and we multiply by the mass of the cell to get total heat capacity
+        self.C_cell = 10280 * (self.dx * 1e-3) * (self.dy * 1e-3) * 1e-3 * 250 
+        #This is just the front face area of the cell for radiative cooling calculations, 
+        # #we assume 1mm depth (This needs to be dynamically updated if the grid dimension change)
+        self.A_cell = 2 * (self.dx * 1e-3) * 1e-3 
+        
+        # Dynamic Grid Arrays
+        self.T_grids = []
+        self.mask_grids = []
+        self.V_dc = None
         
         self.x_pts = np.linspace(0, self.Lx, self.nx)
         self.y_pts = np.linspace(0, self.Ly, self.ny)
@@ -116,7 +122,7 @@ class DigitalTwinSimulator:
         self.e_x[s:e] = x
         self.e_y[s:e] = y
         self.e_vx[s:e] = vx
-        self.e_vy[s:e] = vy
+        self.e_vy[s:e] = vx
         self.num_e += n_new
 
     def build_sparse_matrix(self):
@@ -360,13 +366,6 @@ class DigitalTwinSimulator:
         post_grid = (~p_cex) & (p_x > max_grid_x)
         current_div = np.percentile(np.abs(np.arctan2(p_vy[post_grid], p_vx[post_grid])) * 180 / np.pi, 95) if np.sum(post_grid) > 5 else np.nan
         
-        #min_pot = np.min(self.V[0, :])
-        
-    # Calculate limits dynamically
-        max_grid_x = 1.0 + sum([g['t'] + g['gap'] for g in grids]) if grids else 3.0
-        post_grid = (~p_cex) & (p_x > max_grid_x)
-        current_div = np.percentile(np.abs(np.arctan2(p_vy[post_grid], p_vx[post_grid])) * 180 / np.pi, 95) if np.sum(post_grid) > 5 else np.nan
-        
         # Fixing the saddle point at the centre of the SECOND grid
         if len(grids) >= 2:
             # 1.0 is the fixed start position of the first grid
@@ -409,6 +408,49 @@ class DigitalTwinSimulator:
             dT_cool = cooling_factor * (T_bound**4 - 300.0**4)
             
             self.T_map[self.isBound] -= dT_cool
+            
+            # --- THERMAL CONDUCTION (2D Finite Difference) ---
+            # Using properties for Molybdenum
+            k_moly = 138.0       # Thermal conductivity W/m-K
+            rho_moly = 10280.0   # Density kg/m^3
+            cp_moly = 250.0      # Specific heat J/kg-K
+            alpha_diff = k_moly / (rho_moly * cp_moly) # Thermal diffusivity
+            
+            dt_thermal = self.dt * self.thermal_accel
+            dx_m = self.dx * 1e-3
+            dy_m = self.dy * 1e-3
+            
+            Fo_x = alpha_diff * dt_thermal / (dx_m**2)
+            Fo_y = alpha_diff * dt_thermal / (dy_m**2)
+            
+            # Numerical stability cap for explicit Euler method
+            max_Fo = 0.2
+            scale = 1.0
+            if Fo_x > max_Fo or Fo_y > max_Fo:
+                scale = max_Fo / max(Fo_x, Fo_y)
+                
+            Fo_x *= scale
+            Fo_y *= scale
+            
+            T = self.T_map
+            mask = self.isBound
+            
+            T_up = np.roll(T, -1, axis=0)
+            T_down = np.roll(T, 1, axis=0)
+            T_left = np.roll(T, 1, axis=1)
+            T_right = np.roll(T, -1, axis=1)
+            
+            # Adiabatic boundaries (no heat conducts into the vacuum)
+            T_up = np.where(np.roll(mask, -1, axis=0), T_up, T)
+            T_down = np.where(np.roll(mask, 1, axis=0), T_down, T)
+            T_left = np.where(np.roll(mask, 1, axis=1), T_left, T)
+            T_right = np.where(np.roll(mask, -1, axis=1), T_right, T)
+            
+            dT_cond = Fo_x * (T_left - 2*T + T_right) + Fo_y * (T_up - 2*T + T_down)
+            
+            self.T_map[mask] += dT_cond[mask]
+            # -------------------------------------------------
+
             self.T_map[self.isBound] = np.maximum(self.T_map[self.isBound], 300.0) 
             
             needs_remesh = False
