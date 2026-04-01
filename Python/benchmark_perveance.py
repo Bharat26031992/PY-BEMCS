@@ -36,7 +36,7 @@ def worker_sweep(gap, n0_sweep, result_queue):
         ]
         
         sim.build_domain(params)
-        steady_state_steps = 1000
+        steady_state_steps = 2000
         div_history = []
         
         for step_idx in range(1, steady_state_steps + 1):
@@ -54,7 +54,7 @@ def worker_sweep(gap, n0_sweep, result_queue):
             # -----------------------------------
 
             # Early Stopping Check
-            if step_idx >= 500 and len(div_history) == 50:
+            if step_idx >= 1500 and len(div_history) == 50:
                 if np.std(div_history) < 0.1: 
                     print(f"[Core Gap {gap}mm | n0: {n0:.1e}] CONVERGED EARLY at Step {step_idx}!", flush=True)
                     break
