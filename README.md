@@ -56,7 +56,7 @@ This repository currently includes:
 ### Core Physics
 
 - **Vectorized particle updates** for high-throughput runtime performance.
-- **Reduced electron mass (m_e = M_Xe/100)** to speed up the simulation time.
+- **Artificial electron mass approximation (m_e = M_Xe/100)** to speed up the simulation time.
 - **Self-consistent beam extraction** from plasma meniscus and Bohm criteria.
 - **CEX collision modeling** with probabilistic scattering, with a user-defined region in the source code.
 - **Dynamic erosion and failure logic** due to CEX ions with in-situ remeshing behavior.
