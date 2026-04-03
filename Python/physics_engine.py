@@ -144,7 +144,8 @@ class DigitalTwinSimulator:
         self.kB = 1.380649e-23
         self.eps0 = 8.854e-12
         
-        self.m_e = self.m_XE / 100.0 
+        #self.m_e = self.m_XE / 100.0 
+        self.m_e = self.m_XE / 900.0 
         
         #Material properties for Molybdenum
         self.macro_weight = 3e5  
@@ -156,8 +157,8 @@ class DigitalTwinSimulator:
         # Mesh parameters 
         self.Lx = 20
         self.Ly = 3
-        self.dx = 0.01
-        self.dy = 0.01
+        self.dx = 0.02
+        self.dy = 0.02
         self.nx = int(self.Lx / self.dx) + 1
         self.ny = int(self.Ly / self.dy) + 1
         
