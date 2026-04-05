@@ -42,7 +42,7 @@ This repository currently includes:
 ---
 
 <p align="center">
-  <i>Example of RF-based co-extraction of electrons and ions.</i>
+  <i>Example of RF-based co-extraction of electrons and ions (me=mXe/100) .</i>
 </p>
 
 <p align="center">
