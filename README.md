@@ -17,9 +17,9 @@
 This repository currently includes:
 
 - **Plume MCC Simulator (`charge_exchange_code.m`)**
-  - MATLAB model for CEX ion production, plume expansion, and downstream behavior.
-- **Grid Digital Twin / EOL (`TransientDigitalTwin.m`)**
-  - MATLAB model for accelerated life testing, sputter erosion, and structural failure of accelerator grids.
+  - MATLAB model for CEX ion production, plume expansion, and downstream behavior with custom Faraday probe for measuring CX flux.
+- **Matlab Beam extraction model EOL (`TransientDigitalTwin.m`)**
+  - MATLAB test model for accelerated life testing, sputter erosion, and structural failure of accelerator grids.
 - **Python Digital Twin (latest modular implementation)**
   - **Runner:** `Python/main.py`
   - **GUI layer:** `Python/gui_window.py`
