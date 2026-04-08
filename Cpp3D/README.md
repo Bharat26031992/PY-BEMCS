@@ -2,7 +2,7 @@
 
 **3D Particle-In-Cell Beam Extraction & Monte Carlo Simulation**
 
-A full 3D C++ extension of the PYBEMCS code for studying beam extraction and sputtering/erosion physics in ion thruster grids. Developed at the University of Liverpool.
+A full 3D C++ extension of the PYBEMCS code for studying beam extraction and sputtering/erosion physics in ion thruster grids. Developed by Dr. Bharat Singh Rawat.
 
 ---
 
@@ -19,21 +19,29 @@ A full 3D C++ extension of the PYBEMCS code for studying beam extraction and spu
 
 ### Geometry & Meshing
 - **STEP File Import** — Load CAD geometry via OpenCASCADE with configurable tessellation quality
+- **Face/Body Selection** — Select individual faces or bodies in STEP imports for voltage and source assignment
 - **Automatic Voxelization** — Converts imported surface meshes to structured PIC grids
 - **Built-in Multi-Aperture Grids** — Parametric grid optics with voltage, thickness, gap, radius, and chamfer
 - **Meshing Controls** — Adjustable cell size, auto-sizing, refinement, and domain padding
 
 ### Visualization & GUI
 - **VTK 3D Rendering** — Interactive 3D view with rotation, zoom, and pan
+- **Solid Surface Rendering** — Grid geometry rendered as solid surfaces with transparent domain box
+- **Cut Plane Visualization** — Half-section clipping along X, Y, or Z axes via VTK clipping planes
 - **Particle Visualization** — Color-coded by species (ions=blue, CEX=red, electrons=green)
 - **Field Slicing** — Potential and temperature fields on configurable XY/XZ/YZ slice planes
 - **Real-Time Diagnostics** — Beam divergence, saddle point potential, mean energy, grid temperatures
+- **Process Log Window** — Docked bottom panel with timestamped simulation messages
+- **Sputtering & Thermal Maps** — Dedicated dock windows for sputtering damage and thermal contour visualization
+- **Animated GIF Export** — Record simulation frames and export as animated GIF (File > Record GIF / Save GIF)
+- **Dimensional Scaling** — 1x/10x/100x scaling for Debye length resolution
 - **Dark Theme UI** — Modern Qt6 interface with scrollable control panel
 - **Data Export** — CSV export of all particle positions, velocities, and energies
 
 ### Performance
 - **OpenMP Parallelism** — All compute-heavy loops (field solve, particle push, thermal conduction)
 - **Structure-of-Arrays** — Cache-friendly particle storage for optimal memory access
+- **Batched Rendering** — 10 physics steps per render frame for reduced GUI lag
 - **Adaptive Rendering** — Particle sub-sampling for smooth visualization at high particle counts
 
 ---
@@ -215,7 +223,8 @@ Cpp3D/
         ├── SimulationView3D.h/cpp # VTK 3D visualization widget
         ├── ControlPanel.h/cpp  # Parameter sidebar & diagnostics
         ├── MeshingDialog.h/cpp # Mesh settings dialog
-        └── GeometryImportDialog.h/cpp # STEP import dialog
+        ├── GeometryImportDialog.h/cpp # STEP import dialog
+        └── GifWriter.h         # Animated GIF recording & export
 ```
 
 ---
@@ -233,6 +242,11 @@ The codebase includes fixes for building with MSVC (Visual Studio 2022):
 ---
 
 ## Physics Model Summary
+
+### Coordinate Convention
+- **Z-axis** is the beam/extraction axis
+- **XY-plane** is the transverse plane
+- Default domain: Lx=3 mm, Ly=3 mm, Lz=10 mm
 
 ### Poisson Equation (Electrostatics)
 ```
