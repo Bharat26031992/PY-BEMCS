@@ -7,6 +7,8 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QComboBox>
+#include <QTreeWidget>
+#include <QMap>
 
 namespace BEMCS {
 
@@ -38,11 +40,18 @@ public:
     // Get scale factor (e.g., if STEP is in meters, convert to mm)
     double getScaleFactor() const;
 
+    // Face/body assignments
+    QMap<int, double> getFaceVoltages() const { return faceVoltages_; }
+    int getSourceFaceId() const { return sourceFaceId_; }
+
 private slots:
     void browseFile();
     void doImport();
+    void onAssignVoltage();
+    void onSetSource();
 
 private:
+    void populateFaceTree();
     QLineEdit*       editFilePath_;
     QDoubleSpinBox*  spinDeflection_;
     QDoubleSpinBox*  spinVoltage_;
@@ -54,6 +63,13 @@ private:
 
     SurfaceMesh importedMesh_;
     STEPImporter importer_;
+
+    // Face/body selection
+    QTreeWidget* faceTree_;
+    QPushButton* btnAssignVoltage_;
+    QPushButton* btnSetSource_;
+    QMap<int, double> faceVoltages_;
+    int sourceFaceId_ = -1;
 };
 
 } // namespace BEMCS

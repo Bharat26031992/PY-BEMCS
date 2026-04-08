@@ -10,9 +10,11 @@
 #include <vtkProperty.h>
 #include <vtkVertexGlyphFilter.h>
 #include <vtkStructuredGrid.h>
+#include <vtkStructuredPoints.h>
 #include <vtkDataSetMapper.h>
 #include <vtkPlane.h>
 #include <vtkCutter.h>
+#include <vtkClipPolyData.h>
 #include <vtkThreshold.h>
 #include <vtkGeometryFilter.h>
 #include <vtkCamera.h>
@@ -21,6 +23,10 @@
 #include <vtkOrientationMarkerWidget.h>
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkRenderWindowInteractor.h>
+#include <vtkCellArray.h>
+#include <vtkTriangle.h>
+#include <vtkOutlineSource.h>
+#include <vtkImageData.h>
 #endif
 
 namespace BEMCS {
@@ -64,11 +70,149 @@ void SimulationView3D::setupPipeline() {
     particleActor_ = vtkSmartPointer<vtkActor>::New();
     sliceActor_ = vtkSmartPointer<vtkActor>::New();
 
+    domainBoxActor_ = vtkSmartPointer<vtkActor>::New();
+
+    renderer_->AddActor(domainBoxActor_);
     renderer_->AddActor(gridActor_);
     renderer_->AddActor(particleActor_);
     renderer_->AddActor(sliceActor_);
 
+    // Cut plane (default: clip at midpoint along Y)
+    cutPlane_ = vtkSmartPointer<vtkPlane>::New();
+
     resetCamera();
+}
+
+// Build solid surface mesh from boundary voxels using quad faces
+void SimulationView3D::buildSolidGridSurface(const Grid3D& grid) {
+    auto points = vtkSmartPointer<vtkPoints>::New();
+    auto cells = vtkSmartPointer<vtkCellArray>::New();
+    auto colors = vtkSmartPointer<vtkUnsignedCharArray>::New();
+    colors->SetNumberOfComponents(3);
+    colors->SetName("GridColors");
+
+    // For each boundary cell, check each of its 6 faces.
+    // If the neighbor on that face is NOT a boundary cell, emit a quad.
+    double dx = grid.dx, dy = grid.dy, dz = grid.dz;
+
+    // Direction offsets and quad vertex offsets for each face
+    // Face normals: -X, +X, -Y, +Y, -Z, +Z
+    int dix[6] = {-1, 1, 0, 0, 0, 0};
+    int diy[6] = {0, 0, -1, 1, 0, 0};
+    int diz[6] = {0, 0, 0, 0, -1, 1};
+
+    // Quad corner offsets (relative to cell origin at ix,iy,iz)
+    // For face pointing in -X direction: quad on the x=ix plane
+    double quadVerts[6][4][3] = {
+        // -X face (x = ix*dx)
+        {{0,0,0}, {0,1,0}, {0,1,1}, {0,0,1}},
+        // +X face (x = (ix+1)*dx)
+        {{1,0,0}, {1,0,1}, {1,1,1}, {1,1,0}},
+        // -Y face
+        {{0,0,0}, {0,0,1}, {1,0,1}, {1,0,0}},
+        // +Y face
+        {{0,1,0}, {1,1,0}, {1,1,1}, {0,1,1}},
+        // -Z face
+        {{0,0,0}, {1,0,0}, {1,1,0}, {0,1,0}},
+        // +Z face
+        {{0,0,1}, {0,1,1}, {1,1,1}, {1,0,1}},
+    };
+
+    unsigned char solidColor[3] = {180, 180, 190};
+    unsigned char damageColor[3] = {220, 80, 50};
+
+    for (int iz = 0; iz < grid.nz; iz++) {
+        for (int iy = 0; iy < grid.ny; iy++) {
+            for (int ix = 0; ix < grid.nx; ix++) {
+                size_t id = grid.idx(ix, iy, iz);
+                if (!grid.isBound[id]) continue;
+
+                for (int face = 0; face < 6; face++) {
+                    int nx_ = ix + dix[face];
+                    int ny_ = iy + diy[face];
+                    int nz_ = iz + diz[face];
+
+                    // Emit face if neighbor is outside domain or not boundary
+                    bool emitFace = false;
+                    if (nx_ < 0 || nx_ >= grid.nx ||
+                        ny_ < 0 || ny_ >= grid.ny ||
+                        nz_ < 0 || nz_ >= grid.nz) {
+                        emitFace = true;
+                    } else if (!grid.isBound[grid.idx(nx_, ny_, nz_)]) {
+                        emitFace = true;
+                    }
+
+                    if (emitFace) {
+                        vtkIdType pts[4];
+                        for (int v = 0; v < 4; v++) {
+                            double px = (ix + quadVerts[face][v][0]) * dx;
+                            double py = (iy + quadVerts[face][v][1]) * dy;
+                            double pz = (iz + quadVerts[face][v][2]) * dz;
+                            pts[v] = points->InsertNextPoint(px, py, pz);
+
+                            // Color by damage level
+                            double dmg = grid.damage[id];
+                            if (dmg > 0.01) {
+                                double t = std::min(dmg / 50.0, 1.0);
+                                unsigned char c[3] = {
+                                    static_cast<unsigned char>(solidColor[0] + t * (damageColor[0] - solidColor[0])),
+                                    static_cast<unsigned char>(solidColor[1] + t * (damageColor[1] - solidColor[1])),
+                                    static_cast<unsigned char>(solidColor[2] + t * (damageColor[2] - solidColor[2]))
+                                };
+                                colors->InsertNextTypedTuple(c);
+                            } else {
+                                colors->InsertNextTypedTuple(solidColor);
+                            }
+                        }
+                        cells->InsertNextCell(4, pts);
+                    }
+                }
+            }
+        }
+    }
+
+    auto polyData = vtkSmartPointer<vtkPolyData>::New();
+    polyData->SetPoints(points);
+    polyData->SetPolys(cells);
+    polyData->GetPointData()->SetScalars(colors);
+
+    auto mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+
+    // Apply cut plane clipping if enabled
+    if (cutPlaneEnabled_) {
+        double cx = grid.Lx * 0.5;
+        double cy = grid.Ly * 0.5;
+        double cz = grid.Lz * 0.5;
+
+        if (cutAxis_ == CutAxis::X) {
+            cutPlane_->SetOrigin(cx, 0, 0);
+            cutPlane_->SetNormal(-1, 0, 0);
+        } else if (cutAxis_ == CutAxis::Y) {
+            cutPlane_->SetOrigin(0, cy, 0);
+            cutPlane_->SetNormal(0, -1, 0);
+        } else {
+            cutPlane_->SetOrigin(0, 0, cz);
+            cutPlane_->SetNormal(0, 0, -1);
+        }
+
+        auto clipper = vtkSmartPointer<vtkClipPolyData>::New();
+        clipper->SetInputData(polyData);
+        clipper->SetClipFunction(cutPlane_);
+        clipper->Update();
+        mapper->SetInputConnection(clipper->GetOutputPort());
+    } else {
+        mapper->SetInputData(polyData);
+    }
+
+    gridActor_->SetMapper(mapper);
+    gridActor_->GetProperty()->SetColor(0.7, 0.7, 0.75);
+    gridActor_->GetProperty()->SetOpacity(0.6);
+    gridActor_->GetProperty()->SetEdgeVisibility(true);
+    gridActor_->GetProperty()->SetEdgeColor(0.3, 0.3, 0.35);
+    gridActor_->GetProperty()->SetLineWidth(0.5);
+    gridActor_->GetProperty()->SetAmbient(0.4);
+    gridActor_->GetProperty()->SetDiffuse(0.6);
+    gridActor_->GetProperty()->SetSpecular(0.1);
 }
 
 void SimulationView3D::updateFromSimulator(const Simulator3D& sim,
@@ -76,48 +220,24 @@ void SimulationView3D::updateFromSimulator(const Simulator3D& sim,
     const Grid3D& grid = sim.getGrid();
     if (grid.totalCells == 0) return;
 
-    // ── Update grid geometry (boundary surfaces) ───────────────────────
-    if (showGrid_) {
-        auto points = vtkSmartPointer<vtkPoints>::New();
-        auto polyData = vtkSmartPointer<vtkPolyData>::New();
-
-        // Extract boundary cell centers as points (simplified surface)
-        for (int iz = 0; iz < grid.nz; iz++) {
-            for (int iy = 0; iy < grid.ny; iy++) {
-                for (int ix = 0; ix < grid.nx; ix++) {
-                    size_t id = grid.idx(ix, iy, iz);
-                    if (grid.isBound[id]) {
-                        // Only show surface cells (cells with at least one non-bound neighbor)
-                        bool isSurface = false;
-                        if (ix > 0 && !grid.isBound[grid.idx(ix-1,iy,iz)]) isSurface = true;
-                        if (ix < grid.nx-1 && !grid.isBound[grid.idx(ix+1,iy,iz)]) isSurface = true;
-                        if (iy > 0 && !grid.isBound[grid.idx(ix,iy-1,iz)]) isSurface = true;
-                        if (iy < grid.ny-1 && !grid.isBound[grid.idx(ix,iy+1,iz)]) isSurface = true;
-                        if (iz > 0 && !grid.isBound[grid.idx(ix,iy,iz-1)]) isSurface = true;
-                        if (iz < grid.nz-1 && !grid.isBound[grid.idx(ix,iy,iz+1)]) isSurface = true;
-
-                        if (isSurface) {
-                            points->InsertNextPoint(ix * grid.dx, iy * grid.dy,
-                                                    iz * grid.dz);
-                        }
-                    }
-                }
-            }
-        }
-
-        polyData->SetPoints(points);
-
-        auto glyphFilter = vtkSmartPointer<vtkVertexGlyphFilter>::New();
-        glyphFilter->SetInputData(polyData);
-        glyphFilter->Update();
+    // ── Domain bounding box (transparent wireframe) ─────────────────
+    {
+        auto outline = vtkSmartPointer<vtkOutlineSource>::New();
+        outline->SetBounds(0, grid.Lx, 0, grid.Ly, 0, grid.Lz);
+        outline->Update();
 
         auto mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
-        mapper->SetInputConnection(glyphFilter->GetOutputPort());
+        mapper->SetInputConnection(outline->GetOutputPort());
+        domainBoxActor_->SetMapper(mapper);
+        domainBoxActor_->GetProperty()->SetColor(0.4, 0.6, 0.8);
+        domainBoxActor_->GetProperty()->SetOpacity(0.5);
+        domainBoxActor_->GetProperty()->SetLineWidth(1.5);
+        domainBoxActor_->SetVisibility(true);
+    }
 
-        gridActor_->SetMapper(mapper);
-        gridActor_->GetProperty()->SetColor(0.7, 0.7, 0.7);
-        gridActor_->GetProperty()->SetPointSize(3);
-        gridActor_->GetProperty()->SetOpacity(0.5);
+    // ── Update grid geometry (solid boundary surfaces) ────────────────
+    if (showGrid_) {
+        buildSolidGridSurface(grid);
         gridActor_->SetVisibility(true);
     } else {
         gridActor_->SetVisibility(false);
@@ -176,17 +296,35 @@ void SimulationView3D::updateFromSimulator(const Simulator3D& sim,
         particleActor_->SetVisibility(false);
     }
 
-    // ── Update potential/temperature slice ──────────────────────────────
-    if (showPotential_ || showTemperature_) {
-        const auto& field = showTemperature_ ? grid.T_map : grid.V;
+    // ── Update potential/temperature/damage slice ──────────────────────
+    if (showPotential_ || showTemperature_ || showDamage_) {
+        const std::vector<double>* fieldPtr = &grid.V;
+        const char* fieldName = "Potential";
+        const char* barTitle = "Potential (V)";
+
+        if (showDamage_) {
+            fieldPtr = &grid.damage;
+            fieldName = "Damage";
+            barTitle = "Sputtering Damage";
+        } else if (showTemperature_) {
+            fieldPtr = &grid.T_map;
+            fieldName = "Temperature";
+            barTitle = "Temperature (K)";
+        }
+        const auto& field = *fieldPtr;
+
         auto points = vtkSmartPointer<vtkPoints>::New();
         auto scalars = vtkSmartPointer<vtkFloatArray>::New();
-        scalars->SetName(showTemperature_ ? "Temperature" : "Potential");
+        scalars->SetName(fieldName);
+        auto cells = vtkSmartPointer<vtkCellArray>::New();
 
-        // Extract a 2D slice through the domain
+        // Build a structured 2D quad mesh for the slice (smooth contour)
         int sliceIdx = 0;
+        int rows = 0, cols = 0;
+
         if (slicePlane_ == SlicePlane::XY) {
             sliceIdx = static_cast<int>(slicePos_ * (grid.nz - 1));
+            rows = grid.ny; cols = grid.nx;
             for (int iy = 0; iy < grid.ny; iy++) {
                 for (int ix = 0; ix < grid.nx; ix++) {
                     points->InsertNextPoint(ix * grid.dx, iy * grid.dy,
@@ -197,6 +335,7 @@ void SimulationView3D::updateFromSimulator(const Simulator3D& sim,
             }
         } else if (slicePlane_ == SlicePlane::XZ) {
             sliceIdx = static_cast<int>(slicePos_ * (grid.ny - 1));
+            rows = grid.nz; cols = grid.nx;
             for (int iz = 0; iz < grid.nz; iz++) {
                 for (int ix = 0; ix < grid.nx; ix++) {
                     points->InsertNextPoint(ix * grid.dx, sliceIdx * grid.dy,
@@ -207,6 +346,7 @@ void SimulationView3D::updateFromSimulator(const Simulator3D& sim,
             }
         } else { // YZ
             sliceIdx = static_cast<int>(slicePos_ * (grid.nx - 1));
+            rows = grid.nz; cols = grid.ny;
             for (int iz = 0; iz < grid.nz; iz++) {
                 for (int iy = 0; iy < grid.ny; iy++) {
                     points->InsertNextPoint(sliceIdx * grid.dx, iy * grid.dy,
@@ -217,28 +357,38 @@ void SimulationView3D::updateFromSimulator(const Simulator3D& sim,
             }
         }
 
+        // Build quad cells for smooth rendering
+        for (int r = 0; r < rows - 1; r++) {
+            for (int c = 0; c < cols - 1; c++) {
+                vtkIdType quad[4] = {
+                    r * cols + c,
+                    r * cols + c + 1,
+                    (r + 1) * cols + c + 1,
+                    (r + 1) * cols + c
+                };
+                cells->InsertNextCell(4, quad);
+            }
+        }
+
         auto polyData = vtkSmartPointer<vtkPolyData>::New();
         polyData->SetPoints(points);
+        polyData->SetPolys(cells);
         polyData->GetPointData()->SetScalars(scalars);
-
-        auto glyphFilter = vtkSmartPointer<vtkVertexGlyphFilter>::New();
-        glyphFilter->SetInputData(polyData);
-        glyphFilter->Update();
 
         double range[2];
         scalars->GetRange(range);
+        if (range[0] == range[1]) range[1] = range[0] + 1.0;
         lut_->SetRange(range[0], range[1]);
 
         auto mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
-        mapper->SetInputConnection(glyphFilter->GetOutputPort());
+        mapper->SetInputData(polyData);
         mapper->SetLookupTable(lut_);
         mapper->SetScalarRange(range[0], range[1]);
 
         sliceActor_->SetMapper(mapper);
-        sliceActor_->GetProperty()->SetPointSize(4);
         sliceActor_->SetVisibility(true);
 
-        colorBar_->SetTitle(showTemperature_ ? "Temperature (K)" : "Potential (V)");
+        colorBar_->SetTitle(barTitle);
         colorBar_->SetVisibility(true);
     } else {
         sliceActor_->SetVisibility(false);
@@ -254,8 +404,9 @@ void SimulationView3D::resetCamera() {
 }
 
 void SimulationView3D::setViewXY() {
+    // Top-down view: looking along Z (beam axis), X-Y transverse plane
     auto cam = renderer_->GetActiveCamera();
-    cam->SetPosition(0, 0, 100);
+    cam->SetPosition(0, 0, -100);
     cam->SetFocalPoint(0, 0, 0);
     cam->SetViewUp(0, 1, 0);
     renderer_->ResetCamera();
@@ -263,19 +414,21 @@ void SimulationView3D::setViewXY() {
 }
 
 void SimulationView3D::setViewXZ() {
+    // Side view: Z (beam) horizontal, X transverse vertical
     auto cam = renderer_->GetActiveCamera();
-    cam->SetPosition(0, 100, 0);
+    cam->SetPosition(0, -100, 0);
     cam->SetFocalPoint(0, 0, 0);
-    cam->SetViewUp(0, 0, 1);
+    cam->SetViewUp(0, 0, 1); // Z (beam) points right
     renderer_->ResetCamera();
     renderWindow()->Render();
 }
 
 void SimulationView3D::setViewIso() {
+    // Isometric: Z (beam) runs into the scene
     auto cam = renderer_->GetActiveCamera();
-    cam->SetPosition(50, 30, 40);
-    cam->SetFocalPoint(0, 0, 0);
-    cam->SetViewUp(0, 1, 0);
+    cam->SetPosition(30, -40, -20);
+    cam->SetFocalPoint(0, 0, 10);
+    cam->SetViewUp(0, 0, 1);
     renderer_->ResetCamera();
     renderWindow()->Render();
 }
@@ -303,7 +456,6 @@ void SimulationView3D::initializeGL() {
 void SimulationView3D::paintGL() {
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    // Minimal fallback rendering - displays message
 }
 
 void SimulationView3D::resizeGL(int w, int h) {

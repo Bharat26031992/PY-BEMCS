@@ -5,8 +5,12 @@
 #include "gui/SimulationView3D.h"
 #include "gui/ControlPanel.h"
 
+#include "gui/GifWriter.h"
+
 #include <QMainWindow>
 #include <QTimer>
+#include <QTextEdit>
+#include <QDockWidget>
 #include <memory>
 
 namespace BEMCS {
@@ -31,11 +35,17 @@ private slots:
     void onMeshSettings();
     void onReset();
     void onExportData();
+    void onToggleGifRecording();
+    void onSaveGif();
     void onSimStep();
 
 private:
     void setupMenuBar();
     void createStatusBar();
+    void setupLogWindow();
+    void setupContourDocks();
+    void captureGifFrame();
+    void logMessage(const QString& msg);
 
     // Core simulation
     Simulator3D simulator_;
@@ -50,6 +60,21 @@ private:
     SimulationView3D* view3D_;
     ControlPanel* controlPanel_;
     QTimer* simTimer_;
+
+    // GIF recording
+    GifWriter gifWriter_;
+    bool gifRecording_ = false;
+    QAction* gifRecordAction_ = nullptr;
+
+    // Log window
+    QTextEdit* logWindow_;
+    QDockWidget* logDock_;
+
+    // Contour map docks
+    SimulationView3D* sputterView_;
+    SimulationView3D* thermalView_;
+    QDockWidget* sputterDock_;
+    QDockWidget* thermalDock_;
 };
 
 } // namespace BEMCS

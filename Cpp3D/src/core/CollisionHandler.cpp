@@ -21,9 +21,9 @@ void CollisionHandler::processCEX(ParticleArray& ions, const Grid3D& grid,
         if (!ions.alive[i]) continue;
         if (ions.species[i] == Species::CEX_Ion) continue;
 
-        double px = ions.x[i];
-        // Only collide within grid region
-        if (px < 1.0 || px > grid.Lx) continue;
+        double pz = ions.z[i];
+        // Only collide within grid region (beam along Z)
+        if (pz < 1.0 || pz > grid.Lz) continue;
 
         double vMag = std::sqrt(ions.vx[i] * ions.vx[i] +
                                 ions.vy[i] * ions.vy[i] +
@@ -70,8 +70,8 @@ void CollisionHandler::processSecondaryEmission(
             double py = ionHits.hitIy[h] * grid.dy;
             double pz = ionHits.hitIz[h] * grid.dz;
 
-            // Push slightly away from surface
-            px -= 0.5 * grid.dx;
+            // Push slightly away from surface (upstream along beam axis)
+            pz -= 0.5 * grid.dz;
 
             double pvx = normal_(rng_) * v_see_th;
             double pvy = normal_(rng_) * v_see_th;

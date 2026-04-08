@@ -116,21 +116,21 @@ void Simulator3D::reset() {
 double Simulator3D::getBeamDivergence(const SimParams& params) const {
     if (ions_.count < 5) return std::nan("");
 
-    // Post-grid region
-    double maxGridX = 1.0;
+    // Post-grid region (beam along Z)
+    double maxGridZ = 1.0;
     for (const auto& g : params.grids) {
-        maxGridX += g.thickness_mm + g.gap_mm;
+        maxGridZ += g.thickness_mm + g.gap_mm;
     }
 
     std::vector<double> angles;
     for (size_t i = 0; i < ions_.count; i++) {
         if (!ions_.alive[i]) continue;
         if (ions_.species[i] == Species::CEX_Ion) continue;
-        if (ions_.x[i] <= maxGridX) continue;
+        if (ions_.z[i] <= maxGridZ) continue;
 
-        double vPerp = std::sqrt(ions_.vy[i] * ions_.vy[i] +
-                                 ions_.vz[i] * ions_.vz[i]);
-        double angle = std::abs(std::atan2(vPerp, ions_.vx[i])) * 180.0 / PI;
+        double vPerp = std::sqrt(ions_.vx[i] * ions_.vx[i] +
+                                 ions_.vy[i] * ions_.vy[i]);
+        double angle = std::abs(std::atan2(vPerp, ions_.vz[i])) * 180.0 / PI;
         angles.push_back(angle);
     }
 
@@ -147,9 +147,9 @@ double Simulator3D::getSaddlePointPotential(const SimParams& params) const {
     double g2Start = 1.0 + params.grids[0].thickness_mm + params.grids[0].gap_mm;
     double g2Center = g2Start + params.grids[1].thickness_mm / 2.0;
 
-    int ix = std::clamp(static_cast<int>(g2Center / grid_.dx), 0, grid_.nx - 1);
+    int ix = grid_.nx / 2;
     int iy = grid_.ny / 2;
-    int iz = grid_.nz / 2;
+    int iz = std::clamp(static_cast<int>(g2Center / grid_.dz), 0, grid_.nz - 1);
 
     return grid_.V[grid_.idx(ix, iy, iz)];
 }

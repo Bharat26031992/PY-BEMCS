@@ -48,6 +48,8 @@ signals:
     void showDamageChanged(bool);
     void slicePlaneChanged(int);
     void slicePositionChanged(double);
+    void cutPlaneToggled(bool);
+    void cutAxisChanged(int);
 
 private:
     void setupUI();
@@ -93,6 +95,9 @@ private:
     // Domain
     QDoubleSpinBox* spinLx_, *spinLy_, *spinLz_;
     QDoubleSpinBox* spinDx_;
+
+    // Dimensional scaling
+    QComboBox* comboDimScale_;
 
     // Simulation mode
     QComboBox* comboSimMode_;
