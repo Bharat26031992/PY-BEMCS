@@ -44,13 +44,13 @@ void Grid3D::buildDomain(const SimParams& params) {
     initialize(params);
 
     // Build multi-grid optics geometry in 3D
-    // The beam axis is along X. Grids are planar structures with circular apertures.
-    // In 3D: hole is a cylinder along X through each grid slab.
-    double currentX = 1.0; // Starting position [mm]
+    // The beam axis is along Z. Grids are planar structures with circular apertures.
+    // In 3D: hole is a cylinder along Z through each grid slab.
+    double currentZ = 1.0; // Starting position [mm] along Z (beam axis)
 
     for (size_t gi = 0; gi < params.grids.size(); gi++) {
         const auto& g = params.grids[gi];
-        double gStart = currentX;
+        double gStart = currentZ;
         double gEnd   = gStart + g.thickness_mm;
 
         std::vector<uint8_t> mask(totalCells, 0);
@@ -63,18 +63,18 @@ void Grid3D::buildDomain(const SimParams& params) {
                     double py = iy * dy;
                     double pz = iz * dz;
 
-                    // Check if within grid slab (along X)
-                    if (px >= gStart && px <= gEnd) {
-                        // Radial distance from beam axis (center of Y-Z plane)
+                    // Check if within grid slab (along Z = beam axis)
+                    if (pz >= gStart && pz <= gEnd) {
+                        // Radial distance from beam axis (center of X-Y plane)
+                        double cx = Lx / 2.0;
                         double cy = Ly / 2.0;
-                        double cz = Lz / 2.0;
-                        double r = std::sqrt((py - cy) * (py - cy) +
-                                             (pz - cz) * (pz - cz));
+                        double r = std::sqrt((px - cx) * (px - cx) +
+                                             (py - cy) * (py - cy));
 
                         // Aperture radius with chamfer
-                        double localX = px - gStart;
+                        double localZ = pz - gStart;
                         double R_aperture = g.hole_radius_mm +
-                            localX * std::tan(g.chamfer_deg * PI / 180.0);
+                            localZ * std::tan(g.chamfer_deg * PI / 180.0);
 
                         // Outside the hole = solid grid material
                         if (r >= R_aperture) {
@@ -90,15 +90,15 @@ void Grid3D::buildDomain(const SimParams& params) {
 
         gridMasks.push_back(std::move(mask));
         gridTemps.push_back(300.0);
-        currentX = gEnd + g.gap_mm;
+        currentZ = gEnd + g.gap_mm;
     }
 
-    // Left boundary (plasma source)
+    // Z=0 boundary (plasma source, upstream)
     double vPlasmaBound = params.grids.empty() ? 1000.0 + params.plasmaOffset_V
                           : params.grids[0].voltage_V + params.plasmaOffset_V;
-    for (int iz = 0; iz < nz; iz++) {
-        for (int iy = 0; iy < ny; iy++) {
-            size_t id = idx(0, iy, iz);
+    for (int iy = 0; iy < ny; iy++) {
+        for (int ix = 0; ix < nx; ix++) {
+            size_t id = idx(ix, iy, 0);
             isBound[id] = 1;
             V_fixed[id] = vPlasmaBound;
         }
@@ -132,7 +132,6 @@ void Grid3D::computeEField() {
             for (int ix = 0; ix < nx; ix++) {
                 size_t id = idx(ix, iy, iz);
 
-                // Central differences with boundary clamping
                 int ixp = std::min(ix + 1, nx - 1);
                 int ixm = std::max(ix - 1, 0);
                 int iyp = std::min(iy + 1, ny - 1);
@@ -166,7 +165,6 @@ double Grid3D::interpolate(const std::vector<double>& field,
     double wy = fy - iy0;
     double wz = fz - iz0;
 
-    // Trilinear interpolation
     double c000 = field[idx(ix0,     iy0,     iz0)];
     double c100 = field[idx(ix0 + 1, iy0,     iz0)];
     double c010 = field[idx(ix0,     iy0 + 1, iz0)];

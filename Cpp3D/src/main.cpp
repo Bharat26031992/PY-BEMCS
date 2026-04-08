@@ -12,7 +12,7 @@
 //   - Interactive Qt6 GUI with VTK 3D visualization
 //   - OpenMP parallel acceleration
 //
-// University of Liverpool
+// Dr. Bharat Singh Rawat
 // ============================================================================
 
 #include "gui/MainWindow.h"
@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("PYBEMCS-3D");
     app.setApplicationVersion("1.0.0");
-    app.setOrganizationName("University of Liverpool");
+    app.setOrganizationName("Dr. Bharat Singh Rawat");
 
     // Apply dark theme stylesheet
     app.setStyleSheet(R"(

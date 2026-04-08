@@ -12,6 +12,7 @@
 #include <vtkActor.h>
 #include <vtkScalarBarActor.h>
 #include <vtkLookupTable.h>
+#include <vtkPlane.h>
 #else
 #include <QOpenGLWidget>
 #endif
@@ -58,23 +59,35 @@ public:
     void setSlicePlane(SlicePlane plane) { slicePlane_ = plane; }
     void setSlicePosition(double pos) { slicePos_ = pos; }
 
+    // Cut plane: clip geometry in half along an axis
+    void setCutPlaneEnabled(bool enabled) { cutPlaneEnabled_ = enabled; }
+    enum class CutAxis { X, Y, Z };
+    void setCutAxis(CutAxis axis) { cutAxis_ = axis; }
+
 private:
     void setupPipeline();
+    void buildSolidGridSurface(const Grid3D& grid);
 
     vtkSmartPointer<vtkRenderer> renderer_;
 
     // Geometry actors
-    vtkSmartPointer<vtkActor> gridActor_;
+    vtkSmartPointer<vtkActor> gridActor_;       // Internal grid surfaces
+    vtkSmartPointer<vtkActor> domainBoxActor_;  // Transparent domain bounding box
     vtkSmartPointer<vtkActor> particleActor_;
     vtkSmartPointer<vtkActor> sliceActor_;
     vtkSmartPointer<vtkScalarBarActor> colorBar_;
     vtkSmartPointer<vtkLookupTable> lut_;
+
+    // Cut plane for geometry clipping
+    vtkSmartPointer<vtkPlane> cutPlane_;
 
     bool showParticles_ = true;
     bool showPotential_ = true;
     bool showTemperature_ = false;
     bool showDamage_ = false;
     bool showGrid_ = true;
+    bool cutPlaneEnabled_ = false;
+    CutAxis cutAxis_ = CutAxis::X;
 
     SlicePlane slicePlane_ = SlicePlane::XY;
     double slicePos_ = 0.5; // Normalized [0,1]
@@ -101,6 +114,10 @@ public:
     enum class SlicePlane { XY, XZ, YZ };
     void setSlicePlane(SlicePlane) {}
     void setSlicePosition(double) {}
+
+    void setCutPlaneEnabled(bool) {}
+    enum class CutAxis { X, Y, Z };
+    void setCutAxis(CutAxis) {}
 
 protected:
     void initializeGL() override;

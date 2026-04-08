@@ -7,6 +7,8 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QApplication>
+#include <QInputDialog>
+#include <QHeaderView>
 
 namespace BEMCS {
 
@@ -80,6 +82,34 @@ GeometryImportDialog::GeometryImportDialog(QWidget* parent)
     lblStatus_->setWordWrap(true);
     mainLay->addWidget(lblStatus_);
 
+    // ── Face / Body Assignment ────────────────────────────────────────
+    auto faceGroup = new QGroupBox("Face / Body Assignment");
+    auto faceLay = new QVBoxLayout();
+
+    faceTree_ = new QTreeWidget();
+    faceTree_->setHeaderLabels({"Face", "Type", "Voltage (V)"});
+    faceTree_->header()->setStretchLastSection(true);
+    faceTree_->setMinimumHeight(120);
+    faceTree_->setSelectionMode(QAbstractItemView::SingleSelection);
+    faceLay->addWidget(faceTree_);
+
+    auto faceBtnRow = new QHBoxLayout();
+    btnAssignVoltage_ = new QPushButton("Set Voltage");
+    btnAssignVoltage_->setEnabled(false);
+    btnAssignVoltage_->setStyleSheet("QPushButton { background-color: #FF9800; color: white; padding: 5px; }");
+    connect(btnAssignVoltage_, &QPushButton::clicked, this, &GeometryImportDialog::onAssignVoltage);
+    faceBtnRow->addWidget(btnAssignVoltage_);
+
+    btnSetSource_ = new QPushButton("Set as Particle Source");
+    btnSetSource_->setEnabled(false);
+    btnSetSource_->setStyleSheet("QPushButton { background-color: #9C27B0; color: white; padding: 5px; }");
+    connect(btnSetSource_, &QPushButton::clicked, this, &GeometryImportDialog::onSetSource);
+    faceBtnRow->addWidget(btnSetSource_);
+
+    faceLay->addLayout(faceBtnRow);
+    faceGroup->setLayout(faceLay);
+    mainLay->addWidget(faceGroup);
+
     // ── Dialog buttons ─────────────────────────────────────────────────
     btnApply_ = new QPushButton("Apply to Simulation");
     btnApply_->setEnabled(false);
@@ -151,6 +181,11 @@ void GeometryImportDialog::doImport() {
                   .arg(maxPt.z, 0, 'f', 2);
     lblStatus_->setText(status);
     btnApply_->setEnabled(true);
+
+    // Populate the face tree
+    populateFaceTree();
+    btnAssignVoltage_->setEnabled(true);
+    btnSetSource_->setEnabled(true);
 }
 
 double GeometryImportDialog::getVoltage() const {
@@ -163,6 +198,78 @@ double GeometryImportDialog::getDeflection() const {
 
 double GeometryImportDialog::getScaleFactor() const {
     return spinScale_->value();
+}
+
+void GeometryImportDialog::populateFaceTree() {
+    faceTree_->clear();
+    faceVoltages_.clear();
+    sourceFaceId_ = -1;
+
+    if (importedMesh_.empty()) return;
+
+    // Group triangles into logical faces (~50 triangles each, max 20 faces)
+    int totalTri = static_cast<int>(importedMesh_.triangles.size());
+    int triPerFace = std::max(1, totalTri / 20);
+    int numFaces = std::max(1, (totalTri + triPerFace - 1) / triPerFace);
+    numFaces = std::min(numFaces, 20);
+
+    for (int f = 0; f < numFaces; f++) {
+        int startTri = f * triPerFace;
+        int endTri = std::min(startTri + triPerFace, totalTri);
+        auto item = new QTreeWidgetItem(faceTree_);
+        item->setText(0, QString("Face %1 (%2 tris)").arg(f).arg(endTri - startTri));
+        item->setText(1, "None");
+        item->setText(2, "--");
+        item->setData(0, Qt::UserRole, f);
+    }
+
+    faceTree_->resizeColumnToContents(0);
+}
+
+void GeometryImportDialog::onAssignVoltage() {
+    auto items = faceTree_->selectedItems();
+    if (items.isEmpty()) {
+        QMessageBox::information(this, "No Selection", "Select a face first.");
+        return;
+    }
+
+    auto item = items.first();
+    int faceId = item->data(0, Qt::UserRole).toInt();
+
+    bool ok;
+    double voltage = QInputDialog::getDouble(this, "Set Face Voltage",
+        QString("Voltage for %1 (V):").arg(item->text(0)),
+        faceVoltages_.value(faceId, spinVoltage_->value()),
+        -50000, 50000, 0, &ok);
+
+    if (ok) {
+        faceVoltages_[faceId] = voltage;
+        item->setText(1, "Boundary");
+        item->setText(2, QString::number(voltage, 'f', 0) + " V");
+        item->setForeground(1, QBrush(QColor("#FF9800")));
+    }
+}
+
+void GeometryImportDialog::onSetSource() {
+    auto items = faceTree_->selectedItems();
+    if (items.isEmpty()) {
+        QMessageBox::information(this, "No Selection", "Select a face first.");
+        return;
+    }
+
+    // Clear previous source marking
+    for (int i = 0; i < faceTree_->topLevelItemCount(); i++) {
+        auto it = faceTree_->topLevelItem(i);
+        if (it->text(1) == "Source") {
+            it->setText(1, "None");
+            it->setForeground(1, QBrush(QColor("#e0e0e0")));
+        }
+    }
+
+    auto item = items.first();
+    sourceFaceId_ = item->data(0, Qt::UserRole).toInt();
+    item->setText(1, "Source");
+    item->setForeground(1, QBrush(QColor("#9C27B0")));
 }
 
 } // namespace BEMCS

@@ -108,7 +108,7 @@ struct SimParams {
     double neutralDensity   = 1e20;   // [m^-3]
 
     // Domain (mm)
-    double Lx = 20.0, Ly = 6.0, Lz = 6.0;
+    double Lx = 3.0, Ly = 3.0, Lz = 10.0;
     double dx = 0.05, dy = 0.05, dz = 0.05;
 
     // Acceleration / erosion

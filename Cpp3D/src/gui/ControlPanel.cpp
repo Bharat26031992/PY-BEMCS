@@ -139,14 +139,26 @@ void ControlPanel::setupUI() {
 
     // ── 4. DOMAIN SETTINGS ─────────────────────────────────────────────
     mainLay->addWidget(new QLabel("<b>4. 3D DOMAIN</b>"));
-    row = createSpinRow("Lx (mm):", spinLx_, 5, 200, 20, 1, 1);
+    row = createSpinRow("Lx transv. (mm):", spinLx_, 0.1, 200, 3, 0.5, 1);
     mainLay->addLayout(row);
-    row = createSpinRow("Ly (mm):", spinLy_, 1, 100, 6, 1, 1);
+    row = createSpinRow("Ly transv. (mm):", spinLy_, 0.1, 100, 3, 0.5, 1);
     mainLay->addLayout(row);
-    row = createSpinRow("Lz (mm):", spinLz_, 1, 100, 6, 1, 1);
+    row = createSpinRow("Lz beam (mm):", spinLz_, 0.1, 200, 10, 0.5, 1);
     mainLay->addLayout(row);
     row = createSpinRow("Cell Size (mm):", spinDx_, 0.01, 1.0, 0.05, 0.01, 3);
     mainLay->addLayout(row);
+
+    // Dimensional scaling for Debye length resolution
+    auto scaleRow = new QHBoxLayout();
+    auto lblScale = new QLabel("Dim. Scaling:"); lblScale->setFixedWidth(140);
+    comboDimScale_ = new QComboBox();
+    comboDimScale_->addItems({"1x (Physical)", "10x (Resolve Debye)", "100x (Fine Debye)"});
+    comboDimScale_->setToolTip("Scale geometry dimensions to resolve electron Debye length.\n"
+                                "10x: multiply domain & cell size by 10 for sheath resolution.\n"
+                                "100x: for fine electron-scale physics.");
+    scaleRow->addWidget(lblScale);
+    scaleRow->addWidget(comboDimScale_);
+    mainLay->addLayout(scaleRow);
 
     mainLay->addSpacing(10);
 
@@ -262,6 +274,20 @@ void ControlPanel::setupUI() {
             this, &ControlPanel::slicePositionChanged);
     mainLay->addLayout(row);
 
+    // Cut plane controls
+    auto chkCut = new QCheckBox("Cut Plane (Half Section)");
+    connect(chkCut, &QCheckBox::toggled, this, &ControlPanel::cutPlaneToggled);
+    mainLay->addWidget(chkCut);
+
+    auto cutAxisRow = new QHBoxLayout();
+    cutAxisRow->addWidget(new QLabel("Cut Axis:"));
+    auto comboCutAxis = new QComboBox();
+    comboCutAxis->addItems({"X", "Y", "Z"});
+    connect(comboCutAxis, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &ControlPanel::cutAxisChanged);
+    cutAxisRow->addWidget(comboCutAxis);
+    mainLay->addLayout(cutAxisRow);
+
     mainLay->addSpacing(10);
 
     // ── DIAGNOSTICS ────────────────────────────────────────────────────
@@ -324,13 +350,17 @@ SimParams ControlPanel::getParams() const {
     p.neutRate         = spinNeutRate_->value();
     p.neutElectronTemp = spinNeutTemp_->value();
 
-    // Domain
-    p.Lx = spinLx_->value();
-    p.Ly = spinLy_->value();
-    p.Lz = spinLz_->value();
-    p.dx = spinDx_->value();
-    p.dy = spinDx_->value();
-    p.dz = spinDx_->value();
+    // Domain with dimensional scaling
+    double dimScale = 1.0;
+    if (comboDimScale_->currentIndex() == 1) dimScale = 10.0;
+    else if (comboDimScale_->currentIndex() == 2) dimScale = 100.0;
+
+    p.Lx = spinLx_->value() * dimScale;
+    p.Ly = spinLy_->value() * dimScale;
+    p.Lz = spinLz_->value() * dimScale;
+    p.dx = spinDx_->value() * dimScale;
+    p.dy = spinDx_->value() * dimScale;
+    p.dz = spinDx_->value() * dimScale;
 
     // Sim mode
     int modeIdx = comboSimMode_->currentIndex();

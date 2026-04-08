@@ -32,20 +32,20 @@ void ParticleManager::injectIons(ParticleArray& ions, const Grid3D& grid,
     if (numInject <= 0) return;
 
     double v_spread = std::sqrt(Q_E * params.ionTemp_eV / M_XE);
+    double cx = grid.Lx / 2.0;
     double cy = grid.Ly / 2.0;
-    double cz = grid.Lz / 2.0;
 
     for (int i = 0; i < numInject; i++) {
-        // Uniform random position within circular aperture
+        // Uniform random position within circular aperture in X-Y plane
         double r = rMax * std::sqrt(uniform_(rng_));
         double theta = 2.0 * PI * uniform_(rng_);
-        double py = cy + r * std::cos(theta);
-        double pz = cz + r * std::sin(theta);
-        double px = 0.1; // Near left boundary
+        double px = cx + r * std::cos(theta);
+        double py = cy + r * std::sin(theta);
+        double pz = 0.1; // Near upstream boundary (Z=0)
 
-        double pvx = v_bohm + normal_(rng_) * v_spread;
+        double pvx = normal_(rng_) * v_spread;
         double pvy = normal_(rng_) * v_spread;
-        double pvz = normal_(rng_) * v_spread;
+        double pvz = v_bohm + normal_(rng_) * v_spread; // Z = beam direction
 
         ions.add(px, py, pz, pvx, pvy, pvz, Species::Ion, params.macroWeight);
     }
@@ -72,19 +72,19 @@ void ParticleManager::injectSourceElectrons(ParticleArray& electrons,
     if (numInject <= 0) return;
 
     double v_bohm = std::sqrt(Q_E * Te / M_XE);
+    double cx = grid.Lx / 2.0;
     double cy = grid.Ly / 2.0;
-    double cz = grid.Lz / 2.0;
 
     for (int i = 0; i < numInject; i++) {
         double r = rMax * std::sqrt(uniform_(rng_));
         double theta = 2.0 * PI * uniform_(rng_);
-        double py = cy + r * std::cos(theta);
-        double pz = cz + r * std::sin(theta);
-        double px = 0.1;
+        double px = cx + r * std::cos(theta);
+        double py = cy + r * std::sin(theta);
+        double pz = 0.1; // Near upstream Z=0
 
-        double pvx = std::abs(normal_(rng_)) * v_e_th + v_bohm;
+        double pvx = normal_(rng_) * v_e_th;
         double pvy = normal_(rng_) * v_e_th;
-        double pvz = normal_(rng_) * v_e_th;
+        double pvz = std::abs(normal_(rng_)) * v_e_th + v_bohm; // Z = beam
 
         electrons.add(px, py, pz, pvx, pvy, pvz, Species::Electron,
                       params.macroWeight);
@@ -99,16 +99,16 @@ void ParticleManager::injectNeutralizerElectrons(ParticleArray& electrons,
 
     double Te = params.neutElectronTemp;
     double v_e_th = std::sqrt(2.0 * Q_E * Te / M_ELECTRON);
+    double cx = grid.Lx / 2.0;
     double cy = grid.Ly / 2.0;
-    double cz = grid.Lz / 2.0;
     double neutR = params.neutR_mm;
 
     for (int i = 0; i < numInject; i++) {
         double r = neutR * std::sqrt(uniform_(rng_));
         double theta = 2.0 * PI * uniform_(rng_);
-        double py = cy + r * std::cos(theta);
-        double pz = cz + r * std::sin(theta);
-        double px = params.neutX_mm;
+        double px = cx + r * std::cos(theta);
+        double py = cy + r * std::sin(theta);
+        double pz = params.neutX_mm; // Neutralizer Z position along beam
 
         double pvx = normal_(rng_) * v_e_th;
         double pvy = normal_(rng_) * v_e_th;
@@ -156,7 +156,7 @@ ParticleManager::removeDeadParticles(ParticleArray& particles,
         if (outOfBounds || hitBound) {
             particles.alive[i] = false;
 
-            if (trackHits && hitBound && px > 0.5) {
+            if (trackHits && hitBound && pz > 0.5) {
                 double v2 = particles.vx[i] * particles.vx[i] +
                             particles.vy[i] * particles.vy[i] +
                             particles.vz[i] * particles.vz[i];
