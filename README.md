@@ -17,7 +17,7 @@
 This repository currently includes:
 
 - **Plume MCC Simulator (`charge_exchange_code.m`)**
-  - MATLAB model for CEX ion production, plume expansion, and downstream behavior with custom Faraday probe for measuring CX flux.
+  - MATLAB model for CEX ion production, plume expansion, and downstream behavior with a custom Faraday probe for measuring CX flux.
 - **Matlab Beam extraction model EOL (`TransientDigitalTwin.m`)**
   - MATLAB test model for accelerated life testing, sputter erosion, and structural failure of accelerator grids.
 - **Python Digital Twin (latest modular implementation)**
@@ -28,7 +28,7 @@ This repository currently includes:
 - **C++ 3D PIC Framework (`Cpp3D/`)**
   - Full 3D C++ Particle-In-Cell simulation with Qt6 GUI, VTK visualization, and OpenCASCADE STEP import.
   - Boris pusher, CG Poisson solver, CEX collisions, sputtering/erosion, thermal model, and SEE.
-  - See [`Cpp3D/README.md`](Cpp3D/README.md) for build instructions and details.
+  - See [`Cpp3D/README.md`](Cpp3D/README.md) for build instructions and details (This part is still under development).
 
 ---
 
