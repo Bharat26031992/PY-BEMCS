@@ -27,7 +27,6 @@ This repository currently includes:
   - Full 3D C++ Particle-In-Cell simulation with Qt6 GUI, VTK visualization, and OpenCASCADE STEP import.
   - Boris pusher, CG Poisson solver, CEX collisions, sputtering/erosion, thermal model, and SEE.
   - See [`Cpp3D/README.md`](Cpp3D/README.md) for build instructions and details (This part is still under development).
-
 ---
 
 ## PY-BEMCS Demo
@@ -42,7 +41,6 @@ This repository currently includes:
 </p>
 
 ---
-
 <p align="center">
   <i>Example of RF-based co-extraction of electrons and ions (me=mXe/100) .</i>
 </p>
@@ -62,7 +60,6 @@ This repository currently includes:
   <video src="https://github.com/user-attachments/assets/f541d3a0-647e-4827-9dda-5e4ce4f7e235" width="500px" autoplay loop muted playsinline>
   </video>
 </p>
-
 ---
 ### Core Physics
 
@@ -90,7 +87,6 @@ This repository currently includes:
 - Grid temperature map visualization.
 - CSV export (iteration, electron backstreaming potential, divergence, grid temperatures).
 - GIF recording/export via Pillow.
-
 ---
 
 ## Installation and Usage
