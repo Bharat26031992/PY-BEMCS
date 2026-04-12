@@ -189,10 +189,13 @@ void MainWindow::setupContourDocks() {
     // Sputtering contour map dock
     sputterDock_ = new QDockWidget("Sputtering / Damage Map", this);
     sputterView_ = new SimulationView3D();
-    sputterView_->setShowGrid(false);
+    sputterView_->setShowGrid(true);   // show grid geometry coloured by damage
     sputterView_->setShowParticles(false);
     sputterView_->setShowDamage(true);
     sputterView_->setShowPotential(false);
+    // XZ slice (beam axis horizontal) at Y=centre so grid surfaces are visible
+    sputterView_->setSlicePlane(SimulationView3D::SlicePlane::XZ);
+    sputterView_->setSlicePosition(0.5);
     sputterDock_->setWidget(sputterView_);
     addDockWidget(Qt::RightDockWidgetArea, sputterDock_);
     sputterDock_->setMinimumWidth(350);
@@ -200,10 +203,13 @@ void MainWindow::setupContourDocks() {
     // Thermal contour map dock
     thermalDock_ = new QDockWidget("Temperature Map", this);
     thermalView_ = new SimulationView3D();
-    thermalView_->setShowGrid(false);
+    thermalView_->setShowGrid(true);   // show grid geometry alongside temperature slice
     thermalView_->setShowParticles(false);
     thermalView_->setShowTemperature(true);
     thermalView_->setShowPotential(false);
+    // XZ slice (beam axis horizontal) at Y=centre so thermal gradients are visible
+    thermalView_->setSlicePlane(SimulationView3D::SlicePlane::XZ);
+    thermalView_->setSlicePosition(0.5);
     thermalDock_->setWidget(thermalView_);
     addDockWidget(Qt::RightDockWidgetArea, thermalDock_);
     thermalDock_->setMinimumWidth(350);
