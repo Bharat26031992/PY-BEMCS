@@ -188,24 +188,53 @@ class DigitalTwinSimulator:
 
         # User-imported cross-section splines: {label: {energy, cs, spline, type}}
         self.user_cs = {}
-        
-        #Material properties for Molybdenum
-        self.macro_weight = 3e5  
-        self.alpha_moly = 4.8e-6 
-        self.sb_sigma = 5.67e-8  
-        self.emissivity = 0.8    
-        self.thermal_accel = 1e7 
-        
-        # Mesh parameters 
+
+        # --- Grid Material Presets ---
+        # Each entry: (k [W/m/K], rho [kg/m³], cp [J/kg/K], emissivity,
+        #              alpha_thermal [1/K], sputter_coeff, sputter_threshold_eV)
+        self.MATERIAL_PRESETS = {
+            'Molybdenum': {'k': 138.0, 'rho': 10280.0, 'cp': 250.0,
+                           'emissivity': 0.80, 'alpha': 4.8e-6,
+                           'E_mod': 329e9,
+                           'Y_coeff': 1.05e-4, 'E_th': 30.0},
+            'Steel (SS316)': {'k': 16.3, 'rho': 8000.0, 'cp': 500.0,
+                              'emissivity': 0.60, 'alpha': 16.0e-6,
+                              'E_mod': 193e9,
+                              'Y_coeff': 2.8e-4, 'E_th': 25.0},
+            'Titanium':  {'k': 21.9, 'rho': 4507.0, 'cp': 520.0,
+                          'emissivity': 0.50, 'alpha': 8.6e-6,
+                          'E_mod': 116e9,
+                          'Y_coeff': 1.8e-4, 'E_th': 20.0},
+            'Graphite':  {'k': 120.0, 'rho': 2200.0, 'cp': 710.0,
+                          'emissivity': 0.85, 'alpha': 3.0e-6,
+                          'E_mod': 11e9,
+                          'Y_coeff': 3.5e-4, 'E_th': 15.0},
+        }
+
+        # Active material properties (default: Molybdenum)
+        mat = self.MATERIAL_PRESETS['Molybdenum']
+        self.mat_k = mat['k']
+        self.mat_rho = mat['rho']
+        self.mat_cp = mat['cp']
+        self.emissivity = mat['emissivity']
+        self.alpha_thermal = mat['alpha']
+        self.E_modulus = mat['E_mod']
+        self.sputter_Y_coeff = mat['Y_coeff']
+        self.sputter_E_th = mat['E_th']
+
+        self.macro_weight = 3e5
+        self.sb_sigma = 5.67e-8
+        self.thermal_accel = 1e7
+
+        # Mesh parameters
         self.Lx = 20
         self.Ly = 3
         self.dx = 0.015
         self.dy = 0.015
         self.nx = int(self.Lx / self.dx) + 1
         self.ny = int(self.Ly / self.dy) + 1
-        
-        self.C_cell = 10280 * (self.dx * 1e-3) * (self.dy * 1e-3) * 1e-3 * 250 
-        self.A_cell = 2 * (self.dx * 1e-3) * 1e-3 
+
+        self._recompute_cell_constants()
         
         # Dynamic Grid Arrays
         self.T_grids = []
@@ -259,6 +288,32 @@ class DigitalTwinSimulator:
         self.Bx = np.zeros((self.ny, self.nx), dtype=np.float32)
         self.By = np.zeros((self.ny, self.nx), dtype=np.float32)
         self.Bz = np.zeros((self.ny, self.nx), dtype=np.float32)
+
+    def _recompute_cell_constants(self):
+        """Recompute cell thermal mass and area from current material + mesh."""
+        self.C_cell = self.mat_rho * (self.dx * 1e-3) * (self.dy * 1e-3) * 1e-3 * self.mat_cp
+        self.A_cell = 2 * (self.dx * 1e-3) * 1e-3
+
+    def set_material(self, name=None, props=None):
+        """
+        Set grid material by preset name or custom property dict.
+        props keys: k, rho, cp, emissivity, alpha, Y_coeff, E_th
+        """
+        if name and name in self.MATERIAL_PRESETS:
+            mat = self.MATERIAL_PRESETS[name]
+        elif props:
+            mat = props
+        else:
+            return
+        self.mat_k = mat['k']
+        self.mat_rho = mat['rho']
+        self.mat_cp = mat['cp']
+        self.emissivity = mat['emissivity']
+        self.alpha_thermal = mat['alpha']
+        self.E_modulus = mat['E_mod']
+        self.sputter_Y_coeff = mat['Y_coeff']
+        self.sputter_E_th = mat['E_th']
+        self._recompute_cell_constants()
 
     def lookup_user_cs(self, cs_type_prefix, energy_eV):
         """
@@ -396,23 +451,37 @@ class DigitalTwinSimulator:
         self.mask_grids = []
         self.T_grids = []
         grids = params.get('grids', [])
-        
-        current_x = 1.0 # Starting position for the first grid
-        
+
+        # Initialise per-grid cantilever deflections (mm, in x-direction at free end)
+        if not hasattr(self, 'grid_deflections') or len(self.grid_deflections) != len(grids):
+            self.grid_deflections = [0.0] * len(grids)
+
+        current_x = 1.0  # Starting position for the first grid
+
         for i, grid in enumerate(grids):
             g_start = current_x
             g_end = g_start + grid['t']
-            
-            in_grid = (self.X >= g_start) & (self.X <= g_end)
-            R_grid = grid['r'] + np.maximum(0, self.X - g_start) * np.tan(np.radians(grid['cham']))
-            
+            delta = self.grid_deflections[i]  # tip deflection in mm
+
+            # Cantilever profile: clamped at Y = Ly (top wall), free at Y = r (aperture)
+            # Normalised distance from fixed end: 0 at Ly, 1 at r
+            L_cant = self.Ly - grid['r']       # cantilever length (mm)
+            if L_cant > 0 and abs(delta) > 1e-6:
+                eta = np.clip((self.Ly - self.Y) / L_cant, 0.0, 1.0)
+                dx_bow = delta * eta**2          # quadratic cantilever shape (mm)
+            else:
+                dx_bow = 0.0
+
+            in_grid = (self.X >= g_start + dx_bow) & (self.X <= g_end + dx_bow)
+            R_grid = grid['r'] + np.maximum(0, self.X - (g_start + dx_bow)) * np.tan(np.radians(grid['cham']))
+
             mask = in_grid & (self.Y >= R_grid)
             self.isBound[mask] = True
             self.V_fixed[mask] = grid['V']
-            
+
             self.mask_grids.append(mask)
             self.T_grids.append(300.0)
-            
+
             current_x = g_end + grid['gap']
 
         self.V_dc = np.copy(self.V_fixed) # Store DC potentials for RF superimposition
@@ -643,10 +712,7 @@ class DigitalTwinSimulator:
             self.T_map = self.T_map.astype(np.float32)
             
             # --- THERMAL CONDUCTION (TAICHI) ---
-            k_moly = 138.0       
-            rho_moly = 10280.0   
-            cp_moly = 250.0      
-            alpha_diff = k_moly / (rho_moly * cp_moly) 
+            alpha_diff = self.mat_k / (self.mat_rho * self.mat_cp)
             
             dt_thermal = self.dt * self.thermal_accel
             dx_m = self.dx * 1e-3
@@ -679,13 +745,26 @@ class DigitalTwinSimulator:
             for i, mask in enumerate(self.mask_grids):
                 if np.any(mask):
                     self.T_grids[i] = np.mean(self.T_map[mask])
-                    
-                if i > 0 and i < len(grids):
-                    delta_gap = self.alpha_moly * grids[i-1]['gap'] * (self.T_grids[i] - 300) 
-                    if abs(delta_gap) > 0.05:
-                        params['grids'][i-1]['gap'] -= delta_gap 
-                        needs_remesh = True
-                        
+
+            # --- Cantilever thermal bowing ---
+            # Each grid is clamped at Y=Ly (top wall), free at Y=r (aperture).
+            # Thermal stress from uniform ΔT on a constrained cantilever produces
+            # a tip deflection:  δ = α · ΔT · L² / (2·t)
+            # where L = cantilever length, t = grid thickness.
+            for i, grid in enumerate(grids):
+                dT = self.T_grids[i] - 300.0
+                L_cant_m = (self.Ly - grid['r']) * 1e-3   # cantilever length [m]
+                t_m = grid['t'] * 1e-3                     # thickness [m]
+                if t_m > 0 and L_cant_m > 0:
+                    delta_m = self.alpha_thermal * dT * L_cant_m**2 / (2.0 * t_m)
+                    new_defl = delta_m * 1e3                # convert back to mm
+                else:
+                    new_defl = 0.0
+
+                if abs(new_defl - self.grid_deflections[i]) > 0.005:
+                    self.grid_deflections[i] = new_defl
+                    needs_remesh = True
+
             if needs_remesh:
                 self.build_domain(params)
                 remeshed = True
@@ -728,7 +807,7 @@ class DigitalTwinSimulator:
         is_erosion_hit = hit_grid & (p_x > 0.5)
         if sim_mode in ['Erosion', 'Both'] and np.any(is_erosion_hit):
             E_eV = (0.5 * self.m_ion * (p_vx[is_erosion_hit]**2 + p_vy[is_erosion_hit]**2 + p_vz[is_erosion_hit]**2)) / self.q
-            Y_yield = np.minimum(1.05e-4 * (np.maximum(E_eV - 30, 0))**1.5, 1.0)
+            Y_yield = np.minimum(self.sputter_Y_coeff * (np.maximum(E_eV - self.sputter_E_th, 0))**1.5, 1.0)
             np.add.at(self.damage_map, (iy[is_erosion_hit], ix[is_erosion_hit]), Y_yield * params.get('Accel', 1))
 
             broken_cells = (self.damage_map > params.get('Thresh', 1e5)) & self.isBound

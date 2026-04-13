@@ -99,6 +99,87 @@ class BeamSpeciesDialog(QDialog):
         return self.spin_mass.value(), self.spin_charge.value()
 
 
+# --- GRID MATERIAL DIALOG ---
+class GridMaterialDialog(QDialog):
+    PRESETS = {
+        'Molybdenum':   {'k': 138.0, 'rho': 10280.0, 'cp': 250.0,
+                         'emissivity': 0.80, 'alpha': 4.8e-6, 'E_mod': 329e9,
+                         'Y_coeff': 1.05e-4, 'E_th': 30.0},
+        'Steel (SS316)':{'k': 16.3,  'rho': 8000.0,  'cp': 500.0,
+                         'emissivity': 0.60, 'alpha': 16.0e-6, 'E_mod': 193e9,
+                         'Y_coeff': 2.8e-4,  'E_th': 25.0},
+        'Titanium':     {'k': 21.9,  'rho': 4507.0,  'cp': 520.0,
+                         'emissivity': 0.50, 'alpha': 8.6e-6, 'E_mod': 116e9,
+                         'Y_coeff': 1.8e-4,  'E_th': 20.0},
+        'Graphite':     {'k': 120.0, 'rho': 2200.0,  'cp': 710.0,
+                         'emissivity': 0.85, 'alpha': 3.0e-6, 'E_mod': 11e9,
+                         'Y_coeff': 3.5e-4,  'E_th': 15.0},
+        'Custom':       None,
+    }
+
+    FIELD_DEFS = [
+        ('k',          'Thermal Conductivity (W/m/K):',  0.1, 5000, 138.0,  1),
+        ('rho',        'Density (kg/m³):',               100, 25000, 10280.0, 0),
+        ('cp',         'Specific Heat (J/kg/K):',        50, 5000, 250.0,   0),
+        ('emissivity', 'Emissivity (0-1):',              0.01, 1.0, 0.8,    2),
+        ('alpha',      'Thermal Expansion (1/K):',       0, 1e-3, 4.8e-6,  7),
+        ('E_mod',      "Young's Modulus (Pa):",           1e8, 1e12, 329e9,  0),
+        ('Y_coeff',    'Sputter Yield Coeff:',           0, 1e-2, 1.05e-4, 6),
+        ('E_th',       'Sputter Threshold (eV):',        0, 500,  30.0,    1),
+    ]
+
+    def __init__(self, current_mat_name, current_props, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Grid Material Properties")
+        self.setMinimumWidth(380)
+        layout = QVBoxLayout(self)
+
+        layout.addWidget(QLabel("<b>Select a preset or enter custom values:</b>"))
+
+        self.combo = QComboBox()
+        self.combo.addItems(list(self.PRESETS.keys()))
+        self.combo.currentTextChanged.connect(self._on_preset)
+        layout.addWidget(self.combo)
+
+        self.form = QFormLayout()
+        self.spins = {}
+        for key, label, mn, mx, default, decimals in self.FIELD_DEFS:
+            spin = QDoubleSpinBox()
+            spin.setRange(mn, mx)
+            spin.setDecimals(decimals)
+            spin.setValue(current_props.get(key, default))
+            spin.setSingleStep(10 ** (-decimals) if decimals > 0 else max(1, mx / 100))
+            self.form.addRow(label, spin)
+            self.spins[key] = spin
+        layout.addLayout(self.form)
+
+        btn_box = QHBoxLayout()
+        save_btn = QPushButton("Apply")
+        save_btn.clicked.connect(self.accept)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_box.addWidget(save_btn)
+        btn_box.addWidget(cancel_btn)
+        layout.addLayout(btn_box)
+
+        # Sync combo to current selection
+        if current_mat_name in self.PRESETS:
+            self.combo.setCurrentText(current_mat_name)
+        else:
+            self.combo.setCurrentText('Custom')
+
+    def _on_preset(self, name):
+        props = self.PRESETS.get(name)
+        if props is not None:
+            for key, spin in self.spins.items():
+                spin.setValue(props[key])
+
+    def get_values(self):
+        name = self.combo.currentText()
+        props = {k: s.value() for k, s in self.spins.items()}
+        return name, props
+
+
 # --- CROSS-SECTION VIEWER / MANAGER WINDOW ---
 class CrossSectionViewerWindow(QWidget):
     """
@@ -476,6 +557,10 @@ class DigitalTwinApp(QMainWindow):
 
         # Cross-section data store: {label: {energy, cs, spline, type}}
         self.cs_store = {}
+
+        # Grid material configuration
+        self.mat_name = 'Molybdenum'
+        self.mat_props = GridMaterialDialog.PRESETS['Molybdenum'].copy()
         
         # Advanced settings defaults
         self.adv_params = {
@@ -515,6 +600,13 @@ class DigitalTwinApp(QMainWindow):
         cs_action.triggered.connect(self.open_cs_viewer)
         beam_menu.addAction(cs_action)
 
+        # --- Materials Menu ---
+        mat_menu = menubar.addMenu('Materials')
+
+        mat_action = QAction('Grid Material...', self)
+        mat_action.triggered.connect(self.open_grid_material)
+        mat_menu.addAction(mat_action)
+
     def open_advanced_settings(self):
         dialog = AdvancedSettingsDialog(self.adv_params, self)
         if dialog.exec_() == QDialog.Accepted:
@@ -538,6 +630,18 @@ class DigitalTwinApp(QMainWindow):
         self.cs_viewer_window.raise_()
         self.cs_viewer_window.activateWindow()
 
+    def open_grid_material(self):
+        dialog = GridMaterialDialog(self.mat_name, self.mat_props, self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.mat_name, self.mat_props = dialog.get_values()
+            QMessageBox.information(
+                self, "Material Updated",
+                f"Grid material: {self.mat_name}\n"
+                f"k={self.mat_props['k']:.1f} W/m/K, "
+                f"rho={self.mat_props['rho']:.0f} kg/m³, "
+                f"cp={self.mat_props['cp']:.0f} J/kg/K\n"
+                f"Click '1. BUILD DOMAIN' to apply.")
+
     def apply_advanced_settings_to_sim(self):
         """Injects advanced parameters into the sim engine before building"""
         self.sim.Lx = self.adv_params['Lx']
@@ -552,6 +656,9 @@ class DigitalTwinApp(QMainWindow):
         self.sim.q_ion = self.beam_charge_state * self.sim.q
 
         self.sim.m_e = self.sim.m_ion / self.adv_params['m_e_ratio']
+
+        # Apply grid material properties
+        self.sim.set_material(props=self.mat_props)
 
         # Pass user cross-section splines to the engine
         self.sim.user_cs = {}
@@ -811,7 +918,7 @@ class DigitalTwinApp(QMainWindow):
         species_str = f'{self.beam_mass_amu:.1f} amu, +{self.beam_charge_state}'
         cs_count = sum(1 for ds in self.cs_store.values() if ds.get('spline') is not None)
         cs_str = f' | {cs_count} CS loaded' if cs_count > 0 else ''
-        self.lbl_status.setText(f'Domain Ready. Wt: {self.sim.macro_weight:.1e} | {species_str}{cs_str}')
+        self.lbl_status.setText(f'Domain Ready. Wt: {self.sim.macro_weight:.1e} | {species_str} | {self.mat_name}{cs_str}')
         self.lbl_temp.setText('Grid Temps: ' + ' | '.join([f'G{i+1}: 26°C' for i in range(len(self.grid_widgets))]))
 
     def draw_static_domain(self):
