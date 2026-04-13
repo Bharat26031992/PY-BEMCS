@@ -39,7 +39,10 @@ struct ParticleArray {
         vx.resize(n, 0.0); vy.resize(n, 0.0); vz.resize(n, 0.0);
         species.resize(n, Species::Ion);
         weight.resize(n, 1.0);
-        alive.resize(n, false);
+        // Preserve alive status of existing particles; only new slots get false
+        size_t oldSize = alive.size();
+        alive.resize(n);
+        for (size_t i = oldSize; i < n; i++) alive[i] = false;
         capacity = n;
     }
 
