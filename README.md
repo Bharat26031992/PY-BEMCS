@@ -19,10 +19,10 @@ This repository currently includes:
 - **Matlab Beam extraction model EOL (`TransientDigitalTwin.m`)**
   - MATLAB test model for accelerated life testing, sputter erosion, and structural failure of accelerator grids.
 - **Python Digital Twin (latest modular implementation)**
-  - **Runner:** `Python/main.py`
-  - **GUI layer:** `Python/gui_window.py`
+  - **GUI app:** `Python/main.py`
   - **Physics backend:** `Python/physics_engine.py`
-- **Legacy Python single-file app:** `Python/TrainsientDigitalTwin.py`
+  - **Headless runner:** `Python/run_simulation_from_config.py` (reads `config.ini`)
+- **Legacy Python single-file app:** `Python/transient_digital_twin.py`
 - **C++ 3D PIC Framework (`Cpp3D/`)**
   - Full 3D C++ Particle-In-Cell simulation with Qt6 GUI, VTK visualization, and OpenCASCADE STEP import.
   - Boris pusher, CG Poisson solver, CEX collisions, sputtering/erosion, thermal model, and SEE.
@@ -64,14 +64,47 @@ This repository currently includes:
 ### Core Physics
 
 - **Vectorized particle updates** for high-throughput runtime performance.
-- **Artificial electron mass approximation (m_e = M_Xe/100)** to speed up the simulation time.
+- **Artificial electron mass approximation (m_e = M_ion/1000)** to speed up the simulation time.
 - **Self-consistent beam extraction** from plasma meniscus and Bohm criteria.
-- **CEX collision modeling** with probabilistic scattering, with a user-defined region in the source code.
+- **CEX collision modeling** with probabilistic scattering (Birdsall/Roy plume model), or user-imported cross-section data.
 - **Dynamic erosion and failure logic** due to CEX ions with in-situ remeshing behavior.
 - **RF-based Coextraction** of electron and ion beam.
 - **User-defined multi-grid beam extraction** for different kinds of sources.
 
-### Python Multiphysics Additions (Latest)
+### Configurable Ion Beam Species (Menubar: Beam > Ion Species)
+- Define the beam ion by **atomic/molecular mass** (amu) and **charge state** (+1, +2, etc.).
+- Built-in presets for common species: Xe, Kr, Ar, N2, O2, H2, He, Hg, Cs.
+- Custom mass and charge for any user-defined ion.
+
+### Cross-Section Data Import (Menubar: Beam > Cross-Section Manager)
+- Import CSV tables of **Energy (eV) vs Cross-Section (m^2)** for different reaction channels:
+  - Charge Exchange (CX)
+  - Secondary Electron Yield (SEE)
+  - Custom reactions (e.g., air-mixture gas interactions)
+- **Visualise** imported data on a log-log plot.
+- **Fit a cubic spline** (in log-log space) with adjustable smoothing so that intermediate energy values are interpolated during the simulation.
+- Multiple datasets can be loaded, inspected, and removed.
+- When a fitted CX or SEE spline is present it automatically replaces the built-in analytical model during the run.
+
+### Grid Material Selection (Menubar: Materials > Grid Material)
+- Choose from built-in presets or define fully custom properties:
+
+| Material | k (W/m/K) | rho (kg/m^3) | cp (J/kg/K) | alpha (1/K) | E (GPa) |
+|---|---|---|---|---|---|
+| Molybdenum | 138 | 10 280 | 250 | 4.8e-6 | 329 |
+| Steel (SS316) | 16.3 | 8 000 | 500 | 16.0e-6 | 193 |
+| Titanium | 21.9 | 4 507 | 520 | 8.6e-6 | 116 |
+| Graphite | 120 | 2 200 | 710 | 3.0e-6 | 11 |
+
+- Configurable parameters: thermal conductivity, density, specific heat, emissivity, thermal expansion coefficient, Young's modulus, sputter yield coefficient, and sputter threshold energy.
+
+### Cantilever Thermal Deformation
+- Grids deform like a **cantilever beam**: clamped at the top wall (`Y = Ly`), free at the aperture edge (`Y = r`).
+- Tip deflection driven by thermal stress: `delta = alpha * dT * L^2 / (2*t)`.
+- Quadratic (Euler-Bernoulli) deflection profile applied to the grid boundary mask, producing visible bowing in the beam trajectory plot.
+- Materials with high thermal expansion and low conductivity (e.g., Steel) exhibit significantly faster deformation than refractory metals (e.g., Mo).
+
+### Python Multiphysics Additions
 - **Poisson field update with space charge** using both ion and electron density contributions.
 - **Neutralizer electron model** with configurable electron injection rate and electron temperature.
 - **Thermal-erosion coupling** with simulation modes:
@@ -80,18 +113,17 @@ This repository currently includes:
   - `Erosion`
 - **Thermal monitoring** for screen and accelerator grids.
 
-### Visualization and Data export
+### Visualization and Data Export
 
 - Live plasma and damage-map plots.
 - Electron backstreaming and beam divergence telemetry.
 - Grid temperature map visualization.
 - CSV export (iteration, electron backstreaming potential, divergence, grid temperatures).
+- Particle kinematics export (time, position, velocity, energy, particle type).
 - GIF recording/export via Pillow.
 ---
 
 ## Installation and Usage
-
-- Current release only simulates physics for Xe+ ions (This is an ongoing project).
 
 ### MATLAB Workflow
 
@@ -113,11 +145,19 @@ charge_exchange_code  % Plume/CEX study
 pip install numpy scipy matplotlib PyQt5 Pillow taichi
 ```
 
-3. Launch the modular app:
+3. Launch the GUI app:
 
 ```bash
 python Python/main.py
 ```
+
+4. Or run headless from a configuration file:
+
+```bash
+python Python/run_simulation_from_config.py
+```
+
+Edit `Python/config.ini` to set beam species, grid material, cross-section file paths, grid geometry, plasma parameters, and terminal output options.
 
 ### Python Workflow (Legacy Single File)
 
