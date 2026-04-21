@@ -437,7 +437,7 @@ class CrossSectionViewerWindow(QWidget):
             self.ax.set_ylabel('Cross-Section (m²)')
 
         self.fig.tight_layout()
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
 
 # --- ADVANCED SETTINGS DIALOG ---
@@ -554,7 +554,7 @@ class IEDFWindow(QWidget):
         if len(data) > 0:
             self.ax.hist(data, bins=50, range=(0, x_max), color=color, alpha=0.8, edgecolor='black')
             self.ax.set_xlim(0, x_max)
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
 
 class DigitalTwinApp(QMainWindow):
@@ -605,7 +605,7 @@ class DigitalTwinApp(QMainWindow):
         self.setup_ui()
         self.timer = QTimer()
         self.timer.timeout.connect(self.run_sim_step)
-        self.timer.start(10)
+        self.timer.start(33)
 
     def setup_menu_bar(self):
         menubar = self.menuBar()
@@ -951,6 +951,8 @@ class DigitalTwinApp(QMainWindow):
         self.lbl_temp.setText('Grid Temps: ' + ' | '.join([f'G{i+1}: 26°C' for i in range(len(self.grid_widgets))]))
 
     def draw_static_domain(self):
+        self.temp_mesh = None
+        self.dmg_mesh = None
         self.ax_live.clear()
         self.ax_live.contourf(self.sim.X, self.sim.Y, self.sim.V, 20, cmap='viridis', alpha=0.4) 
         
@@ -975,18 +977,19 @@ class DigitalTwinApp(QMainWindow):
         self.ax_live.set_xlim(0, self.sim.Lx)
         self.ax_live.set_ylim(0, self.sim.Ly)
         self.ax_live.set_title('Beam Extraction & Tracking')
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
     def run_sim_step(self):
         if not self.sim_isRunning: return
 
         remeshed, min_pot, current_div, T_grids = self.sim.step(self.get_params())
-        
+        QApplication.processEvents()
+
         if remeshed:
             self.lbl_status.setText('Domain Remeshed (Thermal or Erosion)!')
             self.draw_static_domain()
 
-        if self.sim.iteration % 5 == 0:
+        if self.sim.iteration % 20 == 0:
             prim_mask = ~self.sim.p_isCEX
             cex_mask = self.sim.p_isCEX
             
@@ -1028,40 +1031,55 @@ class DigitalTwinApp(QMainWindow):
             self.ax_div.set_xlim(max(0, self.sim.iteration - 400), max(100, self.sim.iteration))
             self.ax_div.set_ylim(0, 45)
 
-            self.ax_temp.clear()
-            self.ax_temp.set_title('Grid Temp Map (°C)')
-            self.ax_temp.set_facecolor('black')
-            
             if np.any(self.sim.isBound):
-                T_display_C = np.copy(self.sim.T_map) - 273.15
-                T_display_C[~self.sim.isBound] = np.nan 
-                
-                contour = self.ax_temp.contourf(self.sim.X, self.sim.Y, T_display_C, 15, cmap='inferno')
-                
-                if not hasattr(self, 'cax_temp'):
-                    divider_t = make_axes_locatable(self.ax_temp)
-                    self.cax_temp = divider_t.append_axes("right", size="5%", pad=0.1)
+                T_display_C = np.where(self.sim.isBound, self.sim.T_map - 273.15, np.nan)
+
+                temp_mesh = getattr(self, 'temp_mesh', None)
+                if temp_mesh is None or temp_mesh.get_array().size != T_display_C.size:
+                    self.ax_temp.clear()
+                    self.ax_temp.set_title('Grid Temp Map (°C)')
+                    self.ax_temp.set_facecolor('black')
+                    self.temp_mesh = self.ax_temp.pcolormesh(
+                        self.sim.X, self.sim.Y, T_display_C,
+                        cmap='inferno', shading='nearest')
+                    if not hasattr(self, 'cax_temp'):
+                        divider_t = make_axes_locatable(self.ax_temp)
+                        self.cax_temp = divider_t.append_axes("right", size="5%", pad=0.1)
+                    else:
+                        self.cax_temp.clear()
+                    self.cbar_temp = self.fig.colorbar(self.temp_mesh, cax=self.cax_temp)
+                    self.cbar_temp.set_label('Temperature (°C)')
                 else:
-                    self.cax_temp.clear()
-                    
-                self.cbar_temp = self.fig.colorbar(contour, cax=self.cax_temp)
-                self.cbar_temp.set_label('Temperature (°C)')
-                
+                    self.temp_mesh.set_array(T_display_C.ravel())
+                    vmin = np.nanmin(T_display_C)
+                    vmax = np.nanmax(T_display_C)
+                    if np.isfinite(vmin) and np.isfinite(vmax) and vmax > vmin:
+                        self.temp_mesh.set_clim(vmin, vmax)
+
                 total_len = 1.0 + sum([g['t'].value() + g['gap'].value() for g in self.grid_widgets])
                 self.ax_temp.set_xlim(0.8, total_len + 0.2)
 
-            self.ax_dmg.clear()
-            self.ax_dmg.set_title('Damage Map')
-            self.ax_dmg.contourf(self.sim.X, self.sim.Y, self.sim.damage_map, 15, cmap='hot')
-            gy, gx = np.where(self.sim.isBound)
-            self.ax_dmg.scatter(gx * self.sim.dx, gy * self.sim.dy, s=2, c='grey', alpha=0.5)
-            self.ax_dmg.set_xlim(0, self.sim.Lx)
-            self.ax_dmg.set_ylim(0, self.sim.Ly)
+            dmg_mesh = getattr(self, 'dmg_mesh', None)
+            if dmg_mesh is None or dmg_mesh.get_array().size != self.sim.damage_map.size:
+                self.ax_dmg.clear()
+                self.ax_dmg.set_title('Damage Map')
+                self.dmg_mesh = self.ax_dmg.pcolormesh(
+                    self.sim.X, self.sim.Y, self.sim.damage_map,
+                    cmap='hot', shading='nearest')
+                gy, gx = np.where(self.sim.isBound)
+                self.ax_dmg.scatter(gx * self.sim.dx, gy * self.sim.dy, s=2, c='grey', alpha=0.5)
+                self.ax_dmg.set_xlim(0, self.sim.Lx)
+                self.ax_dmg.set_ylim(0, self.sim.Ly)
+            else:
+                self.dmg_mesh.set_array(self.sim.damage_map.ravel())
+                dmg_max = float(np.max(self.sim.damage_map))
+                if dmg_max > 0:
+                    self.dmg_mesh.set_clim(0, dmg_max)
 
             self.lbl_status.setText(f'Ions: {len(self.sim.p_x)} | e-: {len(self.sim.e_x)} | Iter: {self.sim.iteration}')
             t_str = ' | '.join([f'G{i+1}: {int(T-273.15)}°C' for i, T in enumerate(T_grids)])
             self.lbl_temp.setText('Grid Temps: ' + t_str)
-            self.canvas.draw()
+            self.canvas.draw_idle()
 
             if self.chk_record.isChecked():
                 self.recorded_frames.append(self.canvas.grab().toImage())
