@@ -404,6 +404,9 @@ SimParams ControlPanel::getParams() const {
         p.Lx *= invS; p.Ly *= invS; p.Lz *= invS;
         p.dx *= invS; p.dy *= invS; p.dz *= invS;
 
+        // Upstream-to-first-grid gap
+        p.firstGridZ_mm *= invS;
+
         // Grid optics (lengths + voltages)
         for (auto& g : p.grids) {
             g.thickness_mm   *= invS;
